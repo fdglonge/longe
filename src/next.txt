@@ -1,0 +1,211 @@
+Profilo utente più dettagliato (città)
+Aggiungere città nel medico (per fare confronto con il più vicino del paziente)
+Set di dottori più ampio (anni di esperienza, pazienti avuti e possibilità di somiglianza con il caso del paziente)
+Inserire dati fittizi anche per pazienti (particolare - rapporto cura paziente-medico)
+Ampliare dettagli dottore
+l'llm deve cheidere una overview generale, l'utente inserisce quindi il suo resoconto e l'llm deve andare a prendere i dait essenziali, come altezza peso nome cognome etc..
+l'llm deve poi chiedere se ha capito bene, facendo un elenco dei dati che ha appreso dalla descrizione
+
+-----
+
+- formule matematiche per punteggio (peso - h, attribuzione dottore)
+divisione per regione (punto cardinale)
+screamtura dei dottori per distanza
+determinazione slot in base alla disponibilità dottore
+creazione dizionari per match specialistico (più specializzazione, dottore - paziente etc, dataset?) - corpora it-en
+micro punteggi
+italiano
+aree semantiche per problemi
+(individuazione dei comuni)
+esperienza custom per l'utente (decisinoe delle priorità)
+
+-------
+20/06/25
+
+similarity_index= w*c
+
+w=100/n (num di var, 4)
+c=indice di similarità semantica fra specializzazione del medico e problema paziente/100 -> da 0 a 1
+norm=punteggio paziente / 5 -> da 0.2 a 1 -> per ogni preferenza ((distanza))
+
+domande sui parametri + specifica
+
+ORDINATE PER PRIORITÀ:
+
+- Algoritmo di punteggio principale:
+similarity_index = w × c, dove w=100/n (n=numero di variabili, atutalmente 4)
+c=indice di similarità semantica specializzazione medico-problema paziente/100 (range: 0-1)
+norm=punteggio paziente/5 (per ogni preferenza)
+
+- Ricerca semantica
+
+Componenti del Sistema
+Geolocalizzazione e Distribuzione
+- Divisione per regioni (punti cardinali)
+- Screematura medici per distanza geografica
+- Identificazione automatica dei comuni
+
+Gestione Disponibilità
+- Determinazione slot basata su disponibilità medico
+- Assegnazione temporale degli appuntamenti
+
+Matching Specialistico
+- Creazione dizionari per corrispondenze specialistiche
+- Dataset multilingue (IT-EN) per corpus medico
+- Aree semantiche per categorizzazione problemi
+- Micro-punteggi per affinamento risultati
+
+Personalizzazione Utente
+- Esperienza custom basata su priorità utente
+- Parametrizzazione preferenze individuali
+- Sistema di domande per raccolta parametri specifici
+
+!! Problemi con nomi composti
+
+26/06
+
+1. Integrazione flow da figma per registrazione (https://www.figma.com/design/T7m7mN0Y6VL4BVpHLrfNLt/Longeviva?node-id=0-1&p=f&t=wHC83iUexAmGdl22-0)
+    Motivo di downlaod (le 5 uguali) - anagrafica + lifestyle
+    Obiettivi
+    Aspettative (con punteggio)
+    --- RIEPILOGO ---
+    Registrazione discorsiva
+    Parlami di te
+    Pensare a un messaggio predefinito
+    Domande per la registrazione:
+    - "Ciao sono Longi, il tuo assistente personale di Longeviva! Ti farò qualche domanda per conoscerci meglio!"
+    --
+    "Perché hai scaricato longeviva? Rispondi con i numeri degli oggetti che ti interessano, ad esempio: 1,2,3.
+    1. Voglio migliorare il mio stile di vita con un supporto pratico e costante.
+    2. Ho bisogno di un aiuto concreto per rimettermi in forma.
+    3. Cerco un modo semplice per mangiare meglio e muovermi di più.
+    4. Mi interessa la longevità e voglio prendermi cura della mia salute oggi.
+    5. Mi ha incuriosito l'approccio innovativo con l'AI e la community"
+    --
+    "Quali sono i tuoi obiettivi? Rispondi con i numeri degli oggetti che ti interessano, ad esempio: 1,2,3.
+    1. Perdere peso in modo sano e sostenibile.
+    2. Avere più energia durante la giornata.
+    3. Migliorare la mia composizione corporea.
+    4. Aumentare la mia consapevoleza alimentare.
+    5. Vivere più a lungo e in salute.
+    6. Sentirmi meglio fisicamente e mentalmente."
+    --
+    "Cosa ti aspetti da questo percorso? Rispondi con i numeri degli oggetti che ti interessano, ad esempio: 1,2,3.
+    1. Un percorso personalizzato e facile da seguire.
+    2. Consigli pratici, non complicati.
+    3. Sentirmi seguito/a da chi capisce le mie esigenze.
+    4. Imparare abitudini che durino nel tempo.
+    5. Un'esperienza motivante che mi tenga attivo/a e coinvolto/a."
+    --
+    "Ho capito questo su di te:
+    (Riepilogo delle risposte date)"
+    --
+    Domande necessarie:
+    - Nome (name)
+    - Cognome (surname)
+    - In quale sesso ti identifichi? (sex)
+    - email (email)
+    - data di nascita (birthdate)
+    - peso (weight)
+    - altezza (height)
+    - Codice fiscale (fiscalCode)
+    - Sei un fumatore? (lifeStlye.smokerFrequency)
+    - quante ore al giorno dormi, in media? rispondi inserendo il numero (esempio: 6) - (lifeStyle.hoursOfSleep)
+    - Fai attività fisica? Se sì, rispondi indicanto il lasso temporale (esempio: giornalmente, settimanalmente, mensilmente, ...) - (lifeStyle.physicalActivityFrequency)
+    - Se fai attività fisica, a che livello di intensità? - (lifeStyle.physicalActivityIntensity)
+    - Bevi alcohol? (lifeStyle.smokerFrequency)
+    - Se segui un tipo di dieta, specifica quale. (esempio: chetogenica, mediterranea, vegana, ...) - (lifeStyle.typeOfDiet)
+    - hai delle allergie? Se sì, elencale, altrimenti rispondi no. - (allergies)
+    - ci sono altre cose che vuoi specificare? (additional notes)
+
+    Fase superiore: completata
+
+    ## VEDI 3 LUGLIO
+
+    -- manca: messaggio finale di riepilogo (quello che avevo proposto come preimpostato).
+    --- flow: "Ciao, ho capito questo su di te, qualora dovesse esserci qualche errore, ricopia il messaggio e correggi
+    ..."
+        risposta dell'utente (ok, sì, o comunque affermativa -> preference_handling)
+        else
+            nuovo messaggio dell'utente con modifiche (con posizioni pre assegnate e messaggio pre assegnato)
+            then go risposta dell'utente
+
+    fatto ciò registrazione completata fino a nuovi ordini
+
+2. Punteggio
+    # VEDI 3 LUGLIO
+    situazione attuale: 0
+
+    Per l'assegnazione del punteggio, potrebbe essere ottimale fare una "seconda fase" di registrazione in cui l'utente inserisce le sue priorità fra quelle considerate dal sistema
+    - vicinanza
+    - specializzazione/gravità
+    - ...
+    del tipo "Assegna un punteggio di importanza, da 1 a 5, a questa categoria: ..."
+    norm=punteggio assegnato/5 (come detto)
+    - possibile "preference_scores.py" con preferenceHandler
+
+    Questo darebbe vita a 5 (o n) a una variabile "norm" che va da 1 a 5 (o comunque dipende dai calcoli).
+    successivamente
+    c=indice di similarità semantica specializzazione medico-problema paziente/100 (range: 0-1)
+    ovvero cosine_similarity/100 (1 è il massimo) -> questo per la specializzazione, dove
+    if norm == 1 nella sezione preferenze "specializzazione" allora una ideale threshold potrebbe
+    essere di 0.80 o chicchessia. minore è la norm, minore è la threshold (proporzionalità diretta)
+
+    approfondire processo di punteggio con Simone e fare flow
+
+3. Affinazione ricerca semantica
+
+    attuale: ricerca semantica ok
+
+    migliorie: miglior modello e algoritmo ottimizzato, secondario
+
+
+
+03/07/2025
+
+## Registrazione
+
+Da domande base a testo (pre compilato) + verifica degli attr. da database (lifeStyle...)
+Invertire ordine (domande, anagrafica, etc: vedi figma)
+Messaggio finale precompilato
+Post obiettivo intuire possibile medico da assegnare
+
+### Punteggio (ultimo step di registrazione)
+
+Domande che vengono fatte a fine registrazione (da 1 a 5)
+    - Vicinanza
+    - Specializzaione
+    - Costo
+    - SIMONE
+
+### Semantic
+
+------------------------------------------------------------------------------------------
+
+06/07/2025 ---
+
+Ricerca in registrazione dagli obiettivi del paziente
+
+Post prime tre domande -> summary message
+fallback -> medicina generale se è nella stessa città, poi gli altri
+togliere temporaneo: dettaglio sull'area di interesse (specializzazione: nutrizionista, area di interesse: obesità )
+modello embedding: https://huggingface.co/jinaai/jina-embeddings-v4
+
+Il modello non capisce il discorso --> migliorare emmbedding
+Individuare gli attributi essenziali -->
+ ------- Primo Messaggio
+ Nome
+ Cognome
+ Data di Nascita
+ Sesso
+ Citta di Nascita (con queste info calcolare codice fiscale)
+ Citta di Residenza
+ altezza
+ peso
+ ------- Secondo Messaggio
+ allergie
+ dieta
+ sport
+ motivazione
+Prova con diversi prompt
+Non chiedere il nome all'inizio
