@@ -1583,43 +1583,78 @@ Un momento mentre analizzo le tue preferenze...
         return None
 
     def _create_motivation_summary(self):
-        """Crea un riassunto narrativo migliorato delle risposte motivazionali"""
-        name = self.patient.get_name() if self.patient and self.patient.get_name() else "utente"
+        """Crea un riassunto narrativo migliorato delle risposte motivazionali - VERSIONE CORRETTA"""
+        name = self.patient.get_name() if self.patient and self.patient.get_name() else "L'utente"
 
         summary_parts = []
 
         # Messaggio di apertura personalizzato
-        summary_parts.append(f"Perfetto, {name}! Ho capito cosa ti ha portato qui:")
+        display_name = name.replace("L'utente", "utente") if name == "L'utente" else name
+        summary_parts.append(f"Perfetto, {display_name}! Ho capito cosa ti ha portato qui:")
 
-        # Crea un resoconto narrativo invece di elenchi puntati
+        # Crea un resoconto narrativo CORRETTO in terza persona
         if 'download_reason' in self.motivation_data:
             reasons = self.motivation_data['download_reason']
-            if len(reasons) == 1:
-                reason_text = f"Hai scelto Longeviva perché {reasons[0].lower()}."
-            elif len(reasons) == 2:
-                reason_text = f"Hai scelto Longeviva perché {reasons[0].lower()} e {reasons[1].lower()}."
+            # CORREZIONE: Trasforma in terza persona
+            reason_transformations = {
+                "Voglio migliorare il mio stile di vita con un supporto pratico e costante": "vuoi migliorare il tuo stile di vita con un supporto pratico e costante",
+                "Ho bisogno di un aiuto concreto per rimettermi in forma": "hai bisogno di un aiuto concreto per rimetterti in forma",
+                "Cerco un modo semplice per mangiare meglio e muovermi di più": "cerchi un modo semplice per mangiare meglio e muoverti di più",
+                "Mi interessa la longevità e voglio prendermi cura della mia salute oggi": "sei interessato alla longevità e vuoi prenderti cura della tua salute oggi",
+                "Mi ha incuriosito l'approccio innovativo con l'AI e la community": "sei incuriosito dall'approccio innovativo con l'AI e la community"
+            }
+
+            transformed_reasons = [reason_transformations.get(r, r.lower()) for r in reasons]
+
+            if len(transformed_reasons) == 1:
+                reason_text = f"Hai scelto Longeviva perché {transformed_reasons[0]}."
+            elif len(transformed_reasons) == 2:
+                reason_text = f"Hai scelto Longeviva perché {transformed_reasons[0]} e {transformed_reasons[1]}."
             else:
-                reason_text = f"Hai scelto Longeviva perché {', '.join([r.lower() for r in reasons[:-1]])} e {reasons[-1].lower()}."
+                reason_text = f"Hai scelto Longeviva perché {', '.join(transformed_reasons[:-1])} e {transformed_reasons[-1]}."
             summary_parts.append(reason_text)
 
         if 'objectives' in self.motivation_data:
             objectives = self.motivation_data['objectives']
-            if len(objectives) == 1:
-                obj_text = f"Il tuo obiettivo principale è {objectives[0].lower()}."
-            elif len(objectives) == 2:
-                obj_text = f"I tuoi obiettivi principali sono {objectives[0].lower()} e {objectives[1].lower()}."
+            # CORREZIONE: Trasforma in terza persona
+            objective_transformations = {
+                "Perdere peso in modo sano e sostenibile": "perdere peso in modo sano e sostenibile",
+                "Avere più energia durante la giornata": "avere più energia durante la giornata",
+                "Migliorare la mia composizione corporea": "migliorare la tua composizione corporea",
+                "Aumentare la mia consapevolezza alimentare": "aumentare la tua consapevolezza alimentare",
+                "Vivere più a lungo e in salute": "vivere più a lungo e in salute",
+                "Sentirmi meglio fisicamente e mentalmente": "sentirti meglio fisicamente e mentalmente"
+            }
+
+            transformed_objectives = [objective_transformations.get(o, o.lower()) for o in objectives]
+
+            if len(transformed_objectives) == 1:
+                obj_text = f"Il suo obiettivo principale è {transformed_objectives[0]}."
+            elif len(transformed_objectives) == 2:
+                obj_text = f"I suoi obiettivi principali sono {transformed_objectives[0]} e {transformed_objectives[1]}."
             else:
-                obj_text = f"I tuoi obiettivi principali sono {', '.join([o.lower() for o in objectives[:-1]])} e {objectives[-1].lower()}."
+                obj_text = f"I suoi obiettivi principali sono {', '.join(transformed_objectives[:-1])} e {transformed_objectives[-1]}."
             summary_parts.append(obj_text)
 
         if 'expectations' in self.motivation_data:
             expectations = self.motivation_data['expectations']
-            if len(expectations) == 1:
-                exp_text = f"Ti aspetti {expectations[0].lower()}."
-            elif len(expectations) == 2:
-                exp_text = f"Ti aspetti {expectations[0].lower()} e {expectations[1].lower()}."
+            # CORREZIONE: Trasforma in terza persona
+            expectation_transformations = {
+                "Un percorso personalizzato e facile da seguire": "un percorso personalizzato e facile da seguire",
+                "Consigli pratici, non complicati": "consigli pratici, non complicati",
+                "Sentirmi seguito/a da chi capisce le mie esigenze": "sentirti seguito da chi capisce le tue esigenze",
+                "Imparare abitudini che durino nel tempo": "imparare abitudini che durino nel tempo",
+                "Un'esperienza motivante che mi tenga attivo/a e coinvolto/a": "un'esperienza motivante che yi tenga attivo e coinvolto"
+            }
+
+            transformed_expectations = [expectation_transformations.get(e, e.lower()) for e in expectations]
+
+            if len(transformed_expectations) == 1:
+                exp_text = f"Si aspetta {transformed_expectations[0]}."
+            elif len(transformed_expectations) == 2:
+                exp_text = f"Si aspetta {transformed_expectations[0]} e {transformed_expectations[1]}."
             else:
-                exp_text = f"Ti aspetti {', '.join([e.lower() for e in expectations[:-1]])} e {expectations[-1].lower()}."
+                exp_text = f"Si aspetta {', '.join(transformed_expectations[:-1])} e {transformed_expectations[-1]}."
             summary_parts.append(exp_text)
 
         return "\n\n".join(summary_parts)
