@@ -209,3 +209,5 @@ Individuare gli attributi essenziali -->
  motivazione
 Prova con diversi prompt
 Non chiedere il nome all'inizio
+
+--------------------------------------------------------------------------------------------------------

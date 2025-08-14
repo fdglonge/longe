@@ -1,4 +1,4 @@
-# src/utils/registration_handler.py - AGGIORNATO CON CALCOLO ETÀ
+# src/utils/registration_handler.py - VERSIONE MIGLIORATA CON NUOVO FLUSSO
 import re
 from datetime import datetime
 import json
@@ -32,6 +32,68 @@ def calculate_age_from_birthdate(birth_date_str):
     except Exception as e:
         print(f"⚠️ Errore nel calcolo dell'età: {e}")
         return None
+
+
+def calculate_birth_date_from_age(age):
+    """
+    Calcola una data di nascita approssimativa dall'età
+    """
+    try:
+        current_year = datetime.now().year
+        birth_year = current_year - age
+        # Usa il 1° gennaio come data di nascita approssimativa
+        return f"01/01/{birth_year}"
+    except Exception as e:
+        print(f"⚠️ Errore nel calcolo della data di nascita: {e}")
+        return None
+
+
+def parse_date_italian(date_string):
+    """
+    Parsa date in formato italiano come "28 gennaio 1999" o "28/01/1999"
+    """
+    month_names = {
+        'gennaio': '01', 'febbraio': '02', 'marzo': '03', 'aprile': '04',
+        'maggio': '05', 'giugno': '06', 'luglio': '07', 'agosto': '08',
+        'settembre': '09', 'ottobre': '10', 'novembre': '11', 'dicembre': '12'
+    }
+
+    date_string = date_string.lower().strip()
+
+    # Formato "28 gennaio 1999"
+    for month_name, month_num in month_names.items():
+        if month_name in date_string:
+            pattern = rf'(\d{{1,2}})\s+{month_name}\s+(\d{{4}})'
+            match = re.search(pattern, date_string)
+            if match:
+                day = match.group(1).zfill(2)
+                year = match.group(2)
+                return f"{day}/{month_num}/{year}"
+
+    # Formato DD/MM/YYYY, DD-MM-YYYY, DD.MM.YYYY
+    date_patterns = [
+        r'(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{4})',
+        r'(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{2})'  # Anno a 2 cifre
+    ]
+
+    for pattern in date_patterns:
+        match = re.search(pattern, date_string)
+        if match:
+            day = match.group(1).zfill(2)
+            month = match.group(2).zfill(2)
+            year = match.group(3)
+
+            # Converti anno a 2 cifre in 4 cifre
+            if len(year) == 2:
+                year_int = int(year)
+                if year_int <= 30:  # Assumiamo che anni <= 30 siano 20XX
+                    year = f"20{year}"
+                else:  # Anni > 30 siano 19XX
+                    year = f"19{year}"
+
+            return f"{day}/{month}/{year}"
+
+    return None
 
 
 def calculate_fiscal_code(name, surname, birth_date, sex, birth_city):
@@ -95,7 +157,7 @@ def calculate_fiscal_code(name, surname, birth_date, sex, birth_city):
 
 class RegistrationHandler:
     """
-    Gestisce il processo di registrazione strutturato del paziente
+    Gestisce il processo di registrazione strutturato del paziente - VERSIONE MIGLIORATA
     """
 
     def __init__(self, patient, patient_db):
@@ -110,8 +172,8 @@ class RegistrationHandler:
         # Contatori per gestire i tentativi falliti
         self.first_data_attempts = 0
         self.second_data_attempts = 0
-        self.lifestyle_data_attempts = 0
-        self.max_attempts = 2  # Dopo 2 tentativi, passa al formato strutturato
+        self.clinical_data_attempts = 0  # Nuovo per dati clinici
+        self.max_attempts = 2
 
         # Definizione delle domande motivazionali
         self.motivation_questions = [
@@ -213,7 +275,7 @@ Iniziamo!
         return welcome_message.strip(), self._get_current_question()
 
     def process_answer(self, user_input):
-        """Processa la risposta dell'utente secondo il nuovo flusso SEMPLIFICATO"""
+        """Processa la risposta dell'utente secondo il nuovo flusso MIGLIORATO"""
         if self.current_phase == "motivation_questions":
             return self._process_motivation_answer(user_input)
         elif self.current_phase == "show_summary":
@@ -222,10 +284,12 @@ Iniziamo!
             return self._process_first_data_message(user_input)
         elif self.current_phase == "collect_missing_first_data":
             return self._process_missing_first_data(user_input)
-        elif self.current_phase == "collect_second_data":
-            return self._process_second_data_message(user_input)
-        elif self.current_phase == "collect_missing_second_data":
-            return self._process_missing_second_data(user_input)
+        elif self.current_phase == "collect_purpose":
+            return self._process_purpose_message(user_input)
+        elif self.current_phase == "collect_clinical_data":
+            return self._process_clinical_data_message(user_input)
+        elif self.current_phase == "collect_missing_clinical_data":
+            return self._process_missing_clinical_data(user_input)
         elif self.current_phase == "preference_questions":
             return self._process_preference_answer(user_input)
         elif self.current_phase == "complete":
@@ -266,8 +330,6 @@ Iniziamo!
             summary = self._create_motivation_summary()
 
             summary_message = f"""
-Perfetto! Ho capito questo su di te:
-
 {summary}
 
 Ora procediamo con la raccolta dei tuoi dati per completare la registrazione.
@@ -283,294 +345,26 @@ Premi invio per continuare.
         self.current_phase = "collect_first_data"
 
         first_data_message = """
-Ora ho bisogno delle tue informazioni anagrafiche e fisiche.
+Ora ho bisogno delle tue informazioni anagrafiche.
 
 Scrivi un messaggio naturale che includa:
 - Il tuo nome e cognome
-- La tua data di nascita (DD/MM/YYYY) 
+- La tua data di nascita (puoi scriverla come "15/03/1990" oppure "15 marzo 1990") oppure la tua età
 - Se sei maschio o femmina
 - La città dove sei nato/a
 - La città dove vivi attualmente
 - La tua altezza (in cm)
 - Il tuo peso (in kg)
 
-Esempio: "Sono Mario Rossi, nato il 15/03/1990, sono maschio, nato a Roma dove vivo tuttora. Sono alto 175 cm e peso 70 kg."
+Esempio: "Sono Mario Rossi, nato il 15 marzo 1990, sono maschio, nato a Roma dove vivo tuttora. Sono alto 175 cm e peso 70 kg."
 
 Puoi scrivere in modo naturale come preferisci!
         """
 
         return False, first_data_message.strip(), None
 
-    def _complete_first_data_collection(self):
-        """Completa la raccolta dei primi dati e passa al secondo messaggio COMPLETO"""
-        self.registration_data.update(self.partial_first_data)
-        self._populate_patient_first_data()
-
-        # ✅ NUOVO: Calcola l'età se abbiamo la data di nascita ma non l'età
-        age_calculation_message = ""
-        if 'birth_date' in self.partial_first_data and 'age' not in self.partial_first_data:
-            calculated_age = calculate_age_from_birthdate(self.partial_first_data['birth_date'])
-            if calculated_age:
-                self.registration_data['age'] = calculated_age
-                self.patient.set_age(calculated_age)
-                age_calculation_message = f"\n💡 Ho rilevato la tua data di nascita ({self.partial_first_data['birth_date']}) e ho calcolato automaticamente che hai {calculated_age} anni."
-                print(f"✅ Età calcolata automaticamente: {calculated_age} anni")
-
-        if all(k in self.partial_first_data for k in ['name', 'surname', 'birth_date', 'sex', 'birth_city']):
-            fiscal_code = calculate_fiscal_code(
-                self.partial_first_data['name'],
-                self.partial_first_data['surname'],
-                self.partial_first_data['birth_date'],
-                self.partial_first_data['sex'],
-                self.partial_first_data['birth_city']
-            )
-            self.registration_data['fiscal_code'] = fiscal_code
-            self.patient.set_fiscal_code(fiscal_code)
-
-        self.current_phase = "collect_second_data"
-
-        second_data_message = f"""
-Perfetto!{age_calculation_message} Ora ho bisogno di tutte le informazioni sul tuo stile di vita e salute.
-
-Dimmi tutto quello che riesci in un messaggio naturale:
-
-**Salute:**
-- Se hai allergie (o scrivi "nessuna" se non ne hai)
-- Che tipo di dieta segui (mediterranea, vegana, vegetariana, normale, ecc.)
-- Il problema di salute o il motivo per cui vuoi consultare un medico
-
-**Stile di vita:**
-- Che attività sportiva fai e quanto spesso (es. "palestra 3 volte a settimana", "non faccio sport")
-- Con che intensità (leggera, moderata, intensa)
-- Quante ore dormi di solito ogni notte
-- Quanto spesso bevi alcolici (mai, raramente, occasionalmente, regolarmente)
-- Fumi? (mai, occasionalmente, regolarmente, ex fumatore)
-
-Puoi scrivere tutto insieme in modo naturale come preferisci!
-        """
-
-        return False, second_data_message.strip(), None
-
-    def _process_second_data_message(self, user_input):
-        """Processa il secondo messaggio con TUTTI i dati lifestyle e salute"""
-        # Estrai sia i dati del secondo messaggio che quelli lifestyle
-        extracted_second = self._extract_second_data(user_input)
-        extracted_lifestyle = self._extract_lifestyle_data(user_input)
-
-        # Unisci tutti i dati estratti
-        extracted_data = {**extracted_second, **extracted_lifestyle}
-
-        # Controlla cosa manca da ENTRAMBI i set di dati
-        missing_second = self._check_missing_second_data(extracted_second)
-        missing_lifestyle = self._check_missing_lifestyle_data(extracted_lifestyle)
-        missing_data = missing_second + missing_lifestyle
-
-        if missing_data:
-            self.current_phase = "collect_missing_second_data"
-            self.missing_second_fields = missing_data  # Ora contiene tutto
-            self.partial_second_data = extracted_data
-
-            missing_message = f"""
-Grazie! Mi mancano ancora alcune informazioni:
-
-{self._format_missing_combined_data(missing_data)}
-
-Puoi fornirmele?
-            """
-
-            return False, missing_message.strip(), None
-        else:
-            # Tutti i dati raccolti, vai direttamente alle preferenze
-            self.registration_data.update(extracted_data)
-            self._populate_patient_all_lifestyle_data()
-
-            self.current_phase = "preference_questions"
-            self.current_step = 0
-
-            pref_intro = """
-Perfetto! Ora, per trovare il medico più adatto a te, vorrei capire le tue preferenze.
-
-Ti farò alcune domande su cosa è importante per te nella scelta del medico.
-            """
-
-            return False, pref_intro.strip(), self._get_current_question()
-
-    def _process_missing_second_data(self, user_input):
-        """Processa i dati mancanti del secondo messaggio - VERSIONE UNIFICATA"""
-        self.second_data_attempts += 1
-
-        # Dopo 2 tentativi, passa al formato strutturato
-        if self.second_data_attempts > self.max_attempts:
-            return self._handle_structured_input_combined_data(user_input)
-
-        # Prova estrazione normale di ENTRAMBI i tipi
-        additional_second = self._extract_second_data(user_input)
-        additional_lifestyle = self._extract_lifestyle_data(user_input)
-        additional_data = {**additional_second, **additional_lifestyle}
-
-        self.partial_second_data.update(additional_data)
-
-        # Ricontrolla cosa manca
-        missing_second = self._check_missing_second_data(self.partial_second_data)
-        missing_lifestyle = self._check_missing_lifestyle_data(self.partial_second_data)
-        missing_data = missing_second + missing_lifestyle
-
-        if missing_data:
-            self.missing_second_fields = missing_data
-
-            # Se è il secondo tentativo, avvisa
-            if self.second_data_attempts == self.max_attempts:
-                missing_message = f"""
-Mi mancano ancora questi dati:
-
-{self._format_missing_combined_data(missing_data)}
-
-⚠️ Se ho difficoltà a capire la prossima volta, ti chiederò di usare un formato più semplice.
-Per favore, prova ancora a fornirmeli.
-                """
-            else:
-                missing_message = f"""
-Mi mancano ancora questi dati:
-
-{self._format_missing_combined_data(missing_data)}
-
-Per favore forniscimeli.
-                """
-            return False, missing_message.strip(), None
-        else:
-            # Tutti i dati raccolti
-            self.registration_data.update(self.partial_second_data)
-            self._populate_patient_all_lifestyle_data()
-
-            self.current_phase = "preference_questions"
-            self.current_step = 0
-
-            pref_intro = """
-Perfetto! Ora, per trovare il medico più adatto a te, vorrei capire le tue preferenze.
-
-Ti farò alcune domande su cosa è importante per te nella scelta del medico.
-            """
-
-            return False, pref_intro.strip(), self._get_current_question()
-
-    def _handle_structured_input_combined_data(self, user_input):
-        """Gestisce input strutturato per TUTTI i dati del secondo messaggio"""
-        print(f"🔧 DEBUG: Passaggio a formato strutturato per: {self.missing_second_fields}")
-
-        # Prova a parsare input strutturato con virgole per TUTTI i tipi
-        parsed_second = self._parse_comma_separated_second_input(user_input, self.missing_second_fields)
-        parsed_lifestyle = self._parse_comma_separated_lifestyle_input(user_input, self.missing_second_fields)
-        parsed_data = {**parsed_second, **parsed_lifestyle}
-
-        if parsed_data:
-            self.partial_second_data.update(parsed_data)
-
-            missing_second = self._check_missing_second_data(self.partial_second_data)
-            missing_lifestyle = self._check_missing_lifestyle_data(self.partial_second_data)
-            missing_data = missing_second + missing_lifestyle
-
-            if not missing_data:
-                self.registration_data.update(self.partial_second_data)
-                self._populate_patient_all_lifestyle_data()
-
-                self.current_phase = "preference_questions"
-                self.current_step = 0
-
-                pref_intro = """
-Perfetto! Ora, per trovare il medico più adatto a te, vorrei capire le tue preferenze.
-
-Ti farò alcune domande su cosa è importante per te nella scelta del medico.
-                """
-
-                return False, pref_intro.strip(), self._get_current_question()
-
-        # Se ancora mancano dati, chiedi formato strutturato
-        examples = []
-
-        # Ordine per i dati combinati
-        combined_order = ['allergies', 'diet', 'purpose', 'physical_activity_frequency', 'physical_activity_intensity',
-                          'sleep_hours', 'alcohol_frequency', 'smoking_frequency']
-
-        for field in combined_order:
-            if field in self.missing_second_fields:
-                if field == 'allergies':
-                    examples.append('nessuna')
-                elif field == 'diet':
-                    examples.append('mediterranea')
-                elif field == 'purpose':
-                    examples.append('mal di testa')
-                elif field == 'physical_activity_frequency':
-                    examples.append('mai')
-                elif field == 'physical_activity_intensity':
-                    examples.append('leggera')
-                elif field == 'sleep_hours':
-                    examples.append('7')
-                elif field == 'alcohol_frequency':
-                    examples.append('mai')
-                elif field == 'smoking_frequency':
-                    examples.append('mai')
-
-        structured_message = f"""
-Mi scuso, non riesco ancora a capire perfettamente! 😅
-
-Scrivi semplicemente i dati mancanti separati da virgole:
-
-{', '.join(examples)}
-
-Esempio: {', '.join(examples[:len(self.missing_second_fields)])}
-        """
-
-        return False, structured_message.strip(), None
-
-    def _format_missing_combined_data(self, missing_fields):
-        """Formatta l'elenco dei dati mancanti combinati"""
-        field_names = {
-            'allergies': 'Allergie',
-            'diet': 'Tipo di dieta',
-            'purpose': 'Motivo della consultazione medica',
-            'physical_activity_frequency': 'Frequenza attività fisica (es. "3 volte a settimana", "mai")',
-            'physical_activity_intensity': 'Intensità attività fisica (leggera, moderata, intensa)',
-            'sleep_hours': 'Ore di sonno per notte (es. "7 ore")',
-            'alcohol_frequency': 'Frequenza consumo alcol (mai, raramente, occasionalmente, regolarmente)',
-            'smoking_frequency': 'Abitudine al fumo (mai, occasionalmente, regolarmente, ex fumatore)'
-        }
-
-        return '\n'.join([f"• {field_names.get(field, field)}" for field in missing_fields])
-
-    def _populate_patient_all_lifestyle_data(self):
-        """Popola TUTTI i dati lifestyle e salute nel paziente"""
-        data = self.registration_data
-
-        # Popola allergie e purpose
-        if 'allergies' in data:
-            self.patient.set_allergies(data['allergies'])
-        if 'purpose' in data:
-            self.patient.set_purpose(data['purpose'])
-
-        # Recupera il lifestyle esistente o crea nuovo
-        existing_lifestyle = self.patient.get_lifestyle() or {}
-
-        # Mappa TUTTI i campi lifestyle
-        lifestyle_mapping = {
-            'diet': 'typeOfDiet',
-            'physical_activity_frequency': 'physicalActivityFrequency',
-            'physical_activity_intensity': 'physicalActivityIntensity',
-            'sleep_hours': 'hoursOfSleep',
-            'alcohol_frequency': 'alcoholFrequency',
-            'smoking_frequency': 'smokerFrequency'
-        }
-
-        # Aggiorna lifestyle con TUTTI i nuovi dati
-        for extracted_field, model_field in lifestyle_mapping.items():
-            if extracted_field in data:
-                existing_lifestyle[model_field] = data[extracted_field]
-
-        # Imposta lifestyle completo
-        self.patient.set_lifestyle(existing_lifestyle)
-        print(f"🔍 DEBUG: Lifestyle completo impostato: {existing_lifestyle}")
-
     def _process_first_data_message(self, user_input):
-        """Processa il primo messaggio con dati anagrafici - VERSIONE SICURA"""
+        """Processa il primo messaggio con dati anagrafici - VERSIONE MIGLIORATA"""
         try:
             extracted_data = self._extract_first_data(user_input)
             missing_data = self._check_missing_first_data(extracted_data)
@@ -580,12 +374,16 @@ Esempio: {', '.join(examples[:len(self.missing_second_fields)])}
                 self.missing_fields = missing_data
                 self.partial_first_data = extracted_data
 
-                # ✅ NUOVO: Controlla se abbiamo calcolato l'età e informa l'utente
+                # Messaggio informativo su età/data di nascita
                 age_info_message = ""
                 if extracted_data.get('age_calculated_from_birthdate'):
                     birth_date = extracted_data.get('birth_date', '')
                     age = extracted_data.get('age', '')
                     age_info_message = f"\n\n💡 Ho rilevato la tua data di nascita ({birth_date}) e ho calcolato automaticamente che hai {age} anni."
+                elif extracted_data.get('birth_date_calculated_from_age'):
+                    age = extracted_data.get('age', '')
+                    birth_date = extracted_data.get('birth_date', '')
+                    age_info_message = f"\n\n💡 Hai {age} anni, ho impostato una data di nascita approssimativa ({birth_date})."
 
                 missing_message = f"""
 Grazie!{age_info_message} Ho capito alcune informazioni, ma mi mancano ancora:
@@ -604,7 +402,6 @@ Puoi fornirmele?
             import traceback
             traceback.print_exc()
 
-            # Fallback sicuro: considera tutti i dati come mancanti
             all_fields = ['name', 'surname', 'birth_date', 'sex', 'birth_city', 'city', 'height', 'weight']
 
             missing_message = f"""
@@ -623,416 +420,283 @@ Puoi fornirmeli?
 
             return False, missing_message.strip(), None
 
-    def _process_missing_first_data(self, user_input):
-        """Processa i dati mancanti del primo messaggio - CON FALLBACK STRUTTURATO"""
-        self.first_data_attempts += 1
+    def _complete_first_data_collection(self):
+        """Completa la raccolta dei primi dati e passa al motivo della visita"""
+        self.registration_data.update(self.partial_first_data)
+        self._populate_patient_first_data()
 
-        # Dopo 2 tentativi, passa al formato strutturato
-        if self.first_data_attempts > self.max_attempts:
-            return self._handle_structured_input_first_data(user_input)
+        # Calcola l'età se abbiamo la data di nascita ma non l'età
+        age_calculation_message = ""
+        if 'birth_date' in self.partial_first_data and 'age' not in self.partial_first_data:
+            calculated_age = calculate_age_from_birthdate(self.partial_first_data['birth_date'])
+            if calculated_age:
+                self.registration_data['age'] = calculated_age
+                self.patient.set_age(calculated_age)
+                age_calculation_message = f"\n💡 Ho calcolato automaticamente che hai {calculated_age} anni dalla tua data di nascita."
 
-        # Prova estrazione normale
-        additional_data = self._extract_first_data(user_input)
+        # Calcola codice fiscale se possibile
+        if all(k in self.partial_first_data for k in ['name', 'surname', 'birth_date', 'sex', 'birth_city']):
+            fiscal_code = calculate_fiscal_code(
+                self.partial_first_data['name'],
+                self.partial_first_data['surname'],
+                self.partial_first_data['birth_date'],
+                self.partial_first_data['sex'],
+                self.partial_first_data['birth_city']
+            )
+            self.registration_data['fiscal_code'] = fiscal_code
+            self.patient.set_fiscal_code(fiscal_code)
 
-        # Fallback intelligente se l'estrazione non funziona
-        if not additional_data and self.missing_fields:
-            user_input_clean = user_input.strip()
+        self.current_phase = "collect_purpose"
 
-            # Riconoscimento pattern semplici
-            if len(self.missing_fields) == 1:
-                field = self.missing_fields[0]
+        purpose_message = f"""
+Perfetto!{age_calculation_message}
 
-                if field == 'surname':
-                    surname_simple_patterns = [
-                        r'^([A-Za-zÀ-ÿ]+)$',
-                        r'([A-Za-zÀ-ÿ]+)$'
-                    ]
-                    for pattern in surname_simple_patterns:
-                        match = re.search(pattern, user_input_clean)
-                        if match and len(match.group(1)) > 1:
-                            additional_data['surname'] = match.group(1).title()
-                            print(f"🔍 DEBUG: Cognome riconosciuto: {additional_data['surname']}")
-                            break
+Ora dimmi: **qual è il motivo per cui desideri consultare un medico?**
 
-                elif field == 'birth_date':
-                    date_simple_patterns = [
-                        r'(\d{1,2}/\d{1,2}/\d{4})',
-                        r'(\d{1,2}-\d{1,2}-\d{4})',
-                        r'(\d{1,2}\.\d{1,2}\.\d{4})'
-                    ]
-                    for pattern in date_simple_patterns:
-                        match = re.search(pattern, user_input_clean)
-                        if match:
-                            date_parts = re.split(r'[/\-.]', match.group(1))
-                            if len(date_parts) == 3:
-                                day, month, year = date_parts
-                                additional_data['birth_date'] = f"{day.zfill(2)}/{month.zfill(2)}/{year}"
-                                print(f"🔍 DEBUG: Data riconosciuta: {additional_data['birth_date']}")
-                                break
+Descrivi liberamente il tuo problema, i sintomi che avverti, o quello che ti preoccupa.
+Più dettagli mi fornisci, meglio posso aiutarti a trovare lo specialista giusto.
+        """
 
-                elif field in ['city', 'birth_city']:
-                    italian_cities = [
-                        'roma', 'milano', 'napoli', 'torino', 'palermo', 'genova',
-                        'bologna', 'firenze', 'bari', 'catania', 'venezia', 'verona',
-                        'messina', 'padova', 'trieste', 'brescia', 'parma', 'modena',
-                        'reggio', 'perugia', 'livorno', 'cagliari', 'foggia', 'rimini',
-                        'salerno', 'ferrara', 'pescara', 'monza', 'forlì', 'ravenna'
-                    ]
+        return False, purpose_message.strip(), None
 
-                    potential_city = user_input_clean.lower()
-                    if potential_city in italian_cities:
-                        additional_data[field] = potential_city.title()
-                        print(f"🔍 DEBUG: {field} riconosciuta: {additional_data[field]}")
+    def _process_purpose_message(self, user_input):
+        """Processa il messaggio con il motivo della visita"""
+        # Salva il motivo
+        self.registration_data['purpose'] = user_input
+        self.patient.set_purpose(user_input)
 
-                elif field == 'height':
-                    height_match = re.search(r'(\d+)(?:\s*cm)?', user_input_clean)
-                    if height_match:
-                        height = int(height_match.group(1))
-                        if 120 <= height <= 250:
-                            additional_data['height'] = str(height)
-                            print(f"🔍 DEBUG: Altezza riconosciuta: {additional_data['height']} cm")
+        self.current_phase = "collect_clinical_data"
 
-                elif field == 'weight':
-                    weight_match = re.search(r'(\d+)(?:\s*kg)?', user_input_clean)
-                    if weight_match:
-                        weight = int(weight_match.group(1))
-                        if 30 <= weight <= 300:
-                            additional_data['weight'] = str(weight)
-                            print(f"🔍 DEBUG: Peso riconosciuto: {additional_data['weight']} kg")
+        clinical_data_message = """
+Grazie per aver condiviso il motivo della tua visita.
 
-                elif field == 'sex':
-                    sex_lower = user_input_clean.lower()
-                    if sex_lower in ['m', 'maschio', 'uomo', 'male']:
-                        additional_data['sex'] = 'M'
-                        print(f"🔍 DEBUG: Sesso riconosciuto: M")
-                    elif sex_lower in ['f', 'femmina', 'donna', 'female']:
-                        additional_data['sex'] = 'F'
-                        print(f"🔍 DEBUG: Sesso riconosciuto: F")
+Ora, per completare la tua cartella clinica, mi servirebbe che mi parlassi del tuo stile di vita e della tua salute in generale.
 
-        self.partial_first_data.update(additional_data)
-        missing_data = self._check_missing_first_data(self.partial_first_data)
+Dimmi tutto quello che riesci in un messaggio naturale:
 
-        if missing_data:
-            self.missing_fields = missing_data
+**Allergie e dieta:**
+- Eventuali allergie (alimentari, farmaci, etc.) - se non ne hai scrivi "nessuna"
+- Che tipo di dieta segui (mediterranea, vegana, vegetariana, normale, etc.)
 
-            # Se è il secondo tentativo, avvisa che al prossimo userà formato strutturato
-            if self.first_data_attempts == self.max_attempts:
-                missing_message = f"""
-Mi mancano ancora questi dati:
+**Stile di vita:**
+- Che attività sportiva fai e quanto spesso (es. "palestra 3 volte a settimana", "cammino ogni giorno", "non faccio sport")
+- Con che intensità pratichi sport (leggera, moderata, intensa)
+- Quante ore dormi di solito ogni notte
+- Quanto spesso bevi alcolici (mai, raramente, occasionalmente, regolarmente)
+- Fumi? (mai, occasionalmente, regolarmente, ex fumatore)
 
-{self._format_missing_data(missing_data)}
+Puoi scrivere tutto insieme in modo naturale come preferisci!
+        """
 
-⚠️ Se ho difficoltà a capire la prossima volta, ti chiederò di usare un formato più semplice.
-Per favore, prova ancora a fornirmeli.
-                """
-            else:
-                missing_message = f"""
-Mi mancano ancora questi dati:
+        return False, clinical_data_message.strip(), None
 
-{self._format_missing_data(missing_data)}
+    def _process_clinical_data_message(self, user_input):
+        """Processa il messaggio con i dati clinici"""
+        extracted_clinical = self._extract_clinical_data(user_input)
+        missing_clinical = self._check_missing_clinical_data(extracted_clinical)
 
-Per favore forniscimeli.
-                """
+        if missing_clinical:
+            self.current_phase = "collect_missing_clinical_data"
+            self.missing_clinical_fields = missing_clinical
+            self.partial_clinical_data = extracted_clinical
+
+            missing_message = f"""
+Grazie! Mi mancano ancora alcune informazioni:
+
+{self._format_missing_clinical_data(missing_clinical)}
+
+Puoi fornirmele?
+            """
+
             return False, missing_message.strip(), None
         else:
-            # Completa i dati e passa al secondo messaggio
-            self.registration_data.update(self.partial_first_data)
-            self._populate_patient_first_data()
+            # Tutti i dati clinici raccolti
+            self.registration_data.update(extracted_clinical)
+            self._populate_patient_clinical_data()
 
-            # ✅ NUOVO: Calcola l'età se abbiamo la data di nascita ma non l'età E informa l'utente
-            age_calculation_message = ""
-            if 'birth_date' in self.partial_first_data and 'age' not in self.partial_first_data:
-                calculated_age = calculate_age_from_birthdate(self.partial_first_data['birth_date'])
-                if calculated_age:
-                    self.registration_data['age'] = calculated_age
-                    self.patient.set_age(calculated_age)
-                    age_calculation_message = f"\n\n💡 Ho rilevato la tua data di nascita ({self.partial_first_data['birth_date']}) e ho calcolato automaticamente che hai {calculated_age} anni."
-                    print(f"✅ Età calcolata automaticamente: {calculated_age} anni")
+            self.current_phase = "preference_questions"
+            self.current_step = 0
 
-            if all(k in self.partial_first_data for k in ['name', 'surname', 'birth_date', 'sex', 'birth_city']):
-                fiscal_code = calculate_fiscal_code(
-                    self.partial_first_data['name'],
-                    self.partial_first_data['surname'],
-                    self.partial_first_data['birth_date'],
-                    self.partial_first_data['sex'],
-                    self.partial_first_data['birth_city']
-                )
-                self.registration_data['fiscal_code'] = fiscal_code
-                self.patient.set_fiscal_code(fiscal_code)
+            pref_intro = """
+Perfetto! Ora, per trovare il medico più adatto a te, vorrei capire le tue preferenze.
 
-            # Crea il messaggio con eventuale notifica del calcolo età
-            if age_calculation_message:
-                completion_message = f"Perfetto!{age_calculation_message}"
-                return False, completion_message, None
+Ti farò alcune domande su cosa è importante per te nella scelta del medico.
+            """
+
+            return False, pref_intro.strip(), self._get_current_question()
+
+    def _process_missing_clinical_data(self, user_input):
+        """Processa i dati clinici mancanti"""
+        self.clinical_data_attempts += 1
+
+        if self.clinical_data_attempts > self.max_attempts:
+            return self._handle_structured_clinical_input(user_input)
+
+        additional_data = self._extract_clinical_data(user_input)
+        self.partial_clinical_data.update(additional_data)
+
+        missing_clinical = self._check_missing_clinical_data(self.partial_clinical_data)
+
+        if missing_clinical:
+            self.missing_clinical_fields = missing_clinical
+
+            if self.clinical_data_attempts == self.max_attempts:
+                missing_message = f"""
+Mi mancano ancora questi dati:
+
+{self._format_missing_clinical_data(missing_clinical)}
+
+⚠️ Se ho difficoltà a capire la prossima volta, ti chiederò di usare un formato più semplice.
+                """
             else:
-                return self._complete_first_data_collection()
+                missing_message = f"""
+Mi mancano ancora questi dati:
 
-    def _handle_structured_input_first_data(self, user_input):
-        """Gestisce input strutturato per i dati del primo messaggio"""
-        print(f"🔧 DEBUG: Passaggio a formato strutturato per: {self.missing_fields}")
+{self._format_missing_clinical_data(missing_clinical)}
+                """
 
-        # Prova a parsare input strutturato con virgole
-        parsed_data = self._parse_comma_separated_input(user_input, self.missing_fields)
+            return False, missing_message.strip(), None
+        else:
+            # Tutti i dati raccolti
+            self.registration_data.update(self.partial_clinical_data)
+            self._populate_patient_clinical_data()
+
+            self.current_phase = "preference_questions"
+            self.current_step = 0
+
+            pref_intro = """
+Perfetto! Ora, per trovare il medico più adatto a te, vorrei capire le tue preferenze.
+
+Ti farò alcune domande su cosa è importante per te nella scelta del medico.
+            """
+
+            return False, pref_intro.strip(), self._get_current_question()
+
+    def _handle_structured_clinical_input(self, user_input):
+        """Gestisce input strutturato per dati clinici"""
+        parsed_data = self._parse_comma_separated_clinical_input(user_input, self.missing_clinical_fields)
 
         if parsed_data:
-            self.partial_first_data.update(parsed_data)
-            missing_data = self._check_missing_first_data(self.partial_first_data)
+            self.partial_clinical_data.update(parsed_data)
+            missing_clinical = self._check_missing_clinical_data(self.partial_clinical_data)
 
-            if not missing_data:
-                return self._complete_first_data_collection()
+            if not missing_clinical:
+                self.registration_data.update(self.partial_clinical_data)
+                self._populate_patient_clinical_data()
 
-        # Se ancora mancano dati, chiedi formato strutturato
+                self.current_phase = "preference_questions"
+                self.current_step = 0
+
+                pref_intro = """
+Perfetto! Ora, per trovare il medico più adatto a te, vorrei capire le tue preferenze.
+
+Ti farò alcune domande su cosa è importante per te nella scelta del medico.
+                """
+
+                return False, pref_intro.strip(), self._get_current_question()
+
+        # Formato strutturato
         examples = []
-        field_order = ['surname', 'birth_date', 'sex', 'birth_city', 'city', 'height', 'weight']
+        clinical_order = ['allergies', 'diet', 'physical_activity_frequency', 'physical_activity_intensity',
+                          'sleep_hours', 'alcohol_frequency', 'smoking_frequency']
 
-        for field in field_order:
-            if field in self.missing_fields:
-                if field == 'surname':
-                    examples.append('Rossi')
-                elif field == 'birth_date':
-                    examples.append('15/03/1990')
-                elif field == 'sex':
-                    examples.append('M')
-                elif field == 'birth_city':
-                    examples.append('Roma')
-                elif field == 'city':
-                    examples.append('Milano')
-                elif field == 'height':
-                    examples.append('175')
-                elif field == 'weight':
-                    examples.append('70')
+        for field in clinical_order:
+            if field in self.missing_clinical_fields:
+                if field == 'allergies':
+                    examples.append('nessuna')
+                elif field == 'diet':
+                    examples.append('mediterranea')
+                elif field == 'physical_activity_frequency':
+                    examples.append('mai')
+                elif field == 'physical_activity_intensity':
+                    examples.append('leggera')
+                elif field == 'sleep_hours':
+                    examples.append('7')
+                elif field == 'alcohol_frequency':
+                    examples.append('mai')
+                elif field == 'smoking_frequency':
+                    examples.append('mai')
 
         structured_message = f"""
 Mi scuso, non riesco ancora a capire perfettamente! 😅
 
-Scrivi semplicemente i dati mancanti separati da virgole, in questo ordine:
+Scrivi semplicemente i dati mancanti separati da virgole:
 
 {', '.join(examples)}
 
-Esempio per i tuoi dati mancanti: {', '.join(examples[:len(self.missing_fields)])}
+Esempio: {', '.join(examples[:len(self.missing_clinical_fields)])}
         """
 
         return False, structured_message.strip(), None
 
-    def _parse_comma_separated_input(self, user_input, missing_fields):
-        """Parsing di input separato da virgole"""
-        parsed = {}
-        parts = [part.strip() for part in user_input.split(',')]
-
-        # Ordine standard dei campi
-        field_order = ['surname', 'birth_date', 'sex', 'birth_city', 'city', 'height', 'weight']
-        ordered_missing = [f for f in field_order if f in missing_fields]
-
-        for i, part in enumerate(parts):
-            if i < len(ordered_missing):
-                field = ordered_missing[i]
-
-                if field == 'surname':
-                    if len(part) > 1:
-                        parsed['surname'] = part.title()
-                elif field == 'birth_date':
-                    date_match = re.search(r'(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{4})', part)
-                    if date_match:
-                        day, month, year = date_match.groups()
-                        parsed['birth_date'] = f"{day.zfill(2)}/{month.zfill(2)}/{year}"
-                elif field == 'sex':
-                    if part.upper() in ['M', 'F', 'MASCHIO', 'FEMMINA', 'UOMO', 'DONNA']:
-                        parsed['sex'] = 'M' if part.upper() in ['M', 'MASCHIO', 'UOMO'] else 'F'
-                elif field in ['birth_city', 'city']:
-                    if len(part) > 1:
-                        parsed[field] = part.title()
-                elif field == 'height':
-                    height_match = re.search(r'(\d+)', part)
-                    if height_match:
-                        height = int(height_match.group(1))
-                        if 120 <= height <= 250:
-                            parsed['height'] = str(height)
-                elif field == 'weight':
-                    weight_match = re.search(r'(\d+)', part)
-                    if weight_match:
-                        weight = int(weight_match.group(1))
-                        if 30 <= weight <= 300:
-                            parsed['weight'] = str(weight)
-
-        print(f"🔧 DEBUG: Dati comma-separated parsati: {parsed}")
-        return parsed
-
-    def _parse_comma_separated_second_input(self, user_input, missing_fields):
-        """Parsing di input separato da virgole per secondo messaggio"""
-        parsed = {}
-        parts = [part.strip() for part in user_input.split(',')]
-
-        # Ordine standard dei campi
-        field_order = ['allergies', 'diet', 'purpose']
-        ordered_missing = [f for f in field_order if f in missing_fields]
-
-        for i, part in enumerate(parts):
-            if i < len(ordered_missing):
-                field = ordered_missing[i]
-
-                if field == 'allergies':
-                    parsed['allergies'] = self._parse_allergies_list(part)
-                elif field == 'diet':
-                    parsed['diet'] = part.lower()
-                elif field == 'purpose':
-                    parsed['purpose'] = part
-
-        print(f"🔧 DEBUG: Dati comma-separated secondo messaggio parsati: {parsed}")
-        return parsed
-
-    def _parse_comma_separated_lifestyle_input(self, user_input, missing_fields):
-        """Parsing di input separato da virgole per dati lifestyle"""
-        parsed = {}
-        parts = [part.strip() for part in user_input.split(',')]
-
-        # Ordine standard dei campi
-        field_order = ['physical_activity_frequency', 'physical_activity_intensity', 'sleep_hours', 'alcohol_frequency',
-                       'smoking_frequency']
-        ordered_missing = [f for f in field_order if f in missing_fields]
-
-        for i, part in enumerate(parts):
-            if i < len(ordered_missing):
-                field = ordered_missing[i]
-                part_lower = part.lower()
-
-                if field == 'physical_activity_frequency':
-                    if 'mai' in part_lower or 'non' in part_lower:
-                        parsed['physical_activity_frequency'] = 'mai'
-                    elif 'giorn' in part_lower or 'tutti' in part_lower:
-                        parsed['physical_activity_frequency'] = 'giornalmente'
-                    elif 'settiman' in part_lower or re.search(r'\d+.*settiman', part_lower):
-                        parsed['physical_activity_frequency'] = 'settimanalmente'
-                    else:
-                        parsed['physical_activity_frequency'] = part_lower
-
-                elif field == 'physical_activity_intensity':
-                    if 'leggera' in part_lower or 'bassa' in part_lower:
-                        parsed['physical_activity_intensity'] = 'leggera'
-                    elif 'moderata' in part_lower or 'media' in part_lower:
-                        parsed['physical_activity_intensity'] = 'moderata'
-                    elif 'intensa' in part_lower or 'alta' in part_lower:
-                        parsed['physical_activity_intensity'] = 'intensa'
-                    else:
-                        parsed['physical_activity_intensity'] = part_lower
-
-                elif field == 'sleep_hours':
-                    hours_match = re.search(r'(\d+)', part)
-                    if hours_match:
-                        parsed['sleep_hours'] = int(hours_match.group(1))
-
-                elif field == 'alcohol_frequency':
-                    if 'mai' in part_lower or 'non' in part_lower:
-                        parsed['alcohol_frequency'] = 'mai'
-                    elif 'raram' in part_lower:
-                        parsed['alcohol_frequency'] = 'raramente'
-                    elif 'occasion' in part_lower:
-                        parsed['alcohol_frequency'] = 'occasionalmente'
-                    elif 'regolar' in part_lower:
-                        parsed['alcohol_frequency'] = 'regolarmente'
-                    else:
-                        parsed['alcohol_frequency'] = part_lower
-
-                elif field == 'smoking_frequency':
-                    if 'mai' in part_lower or 'non' in part_lower:
-                        parsed['smoking_frequency'] = 'mai'
-                    elif 'ex' in part_lower or 'smesso' in part_lower:
-                        parsed['smoking_frequency'] = 'ex fumatore'
-                    elif 'occasion' in part_lower or 'raram' in part_lower:
-                        parsed['smoking_frequency'] = 'occasionalmente'
-                    elif 'regolar' in part_lower or 'spesso' in part_lower:
-                        parsed['smoking_frequency'] = 'regolarmente'
-                    else:
-                        parsed['smoking_frequency'] = part_lower
-
-        print(f"🔧 DEBUG: Dati comma-separated lifestyle parsati: {parsed}")
-        return parsed
-
-    def _process_preference_answer(self, user_input):
-        """Processa le risposte alle domande sulle preferenze"""
-        current_question = self.preference_questions[self.current_step]
-        field = current_question["field"]
-
-        try:
-            rating = int(user_input.strip())
-            if not (1 <= rating <= 5):
-                return False, "Per favore inserisci un numero da 1 a 5:", current_question["question"]
-
-            self.preferences_data[field] = rating
-
-        except ValueError:
-            return False, "Per favore inserisci un numero da 1 a 5:", current_question["question"]
-
-        self.current_step += 1
-
-        if self.current_step >= len(self.preference_questions):
-            return self._complete_registration()
-
-        return False, "Grazie!", self._get_current_question()
-
-    def _complete_registration(self):
-        """Completa la registrazione e avvia la ricerca semantica"""
-        try:
-            self._populate_patient_all_data()
-
-            complete_notes = self._create_complete_notes()
-            self.patient.set_additional_notes(complete_notes)
-
-            patient_id = self.patient_db.save_patient(self.patient)
-
-            if patient_id:
-                success_message = """
-✅ Registrazione completata con successo!
-
-Il tuo profilo è stato salvato e ora procederò con la ricerca del medico più adatto alle tue esigenze utilizzando l'intelligenza artificiale.
-
-Un momento mentre analizzo le tue preferenze...
-                """
-
-                return True, success_message.strip(), None
-            else:
-                return False, "Errore nel salvataggio. Riprova.", None
-
-        except Exception as e:
-            print(f"❌ Errore nella registrazione: {e}")
-            return False, "Si è verificato un errore. Riprova.", None
-
     def _extract_first_data(self, text):
-        """Estrae i dati anagrafici dal primo messaggio - VERSIONE CORRETTA"""
+        """Estrae i dati anagrafici dal primo messaggio - VERSIONE MIGLIORATA"""
         extracted = {}
         text_lower = text.lower()
 
         print(f"🔍 DEBUG: Estrazione primo messaggio: '{text}'")
 
-        # PRIORITY 1: Estrazione data di nascita - CORRETTA
+        # PRIORITY 1: Estrazione data di nascita - MIGLIORATA con formati italiani
         date_patterns = [
+            r'nato\s+(?:il\s+)?(\d{1,2}\s+[a-zA-Z]+\s+\d{4})',  # "nato il 28 gennaio 1999"
+            r'nata\s+(?:il\s+)?(\d{1,2}\s+[a-zA-Z]+\s+\d{4})',  # "nata il 28 gennaio 1999"
+            r'nascita.*?(\d{1,2}\s+[a-zA-Z]+\s+\d{4})',
             r'nato\s+(?:il\s+)?(\d{1,2}/\d{1,2}/\d{4})',
             r'nata\s+(?:il\s+)?(\d{1,2}/\d{1,2}/\d{4})',
             r'nascita.*?(\d{1,2}/\d{1,2}/\d{4})',
+            r'\b(\d{1,2}\s+[a-zA-Z]+\s+\d{4})\b',  # Formato "28 gennaio 1999" standalone
             r'\b(\d{1,2}/\d{1,2}/\d{4})\b',  # Pattern generico con word boundary
             r'(\d{1,2}-\d{1,2}-\d{4})',  # Formato con trattini
             r'(\d{1,2}\.\d{1,2}\.\d{4})'  # Formato con punti
         ]
 
         for pattern in date_patterns:
-            match = re.search(pattern, text)  # USA IL TESTO ORIGINALE, non lowercase
+            match = re.search(pattern, text, re.IGNORECASE)
             if match:
                 date_str = match.group(1)
-                # Normalizza il formato
-                date_normalized = re.sub(r'[-.]', '/', date_str)
-                day, month, year = date_normalized.split('/')
-                extracted['birth_date'] = f"{day.zfill(2)}/{month.zfill(2)}/{year}"
-                print(f"🔍 DEBUG: Data estratta: {extracted['birth_date']}")
+                # Usa la nuova funzione per parsare date italiane
+                parsed_date = parse_date_italian(date_str)
+                if parsed_date:
+                    extracted['birth_date'] = parsed_date
+                    print(f"🔍 DEBUG: Data estratta: {extracted['birth_date']}")
 
-                # ✅ NUOVO: Calcola automaticamente l'età dalla data di nascita
-                calculated_age = calculate_age_from_birthdate(extracted['birth_date'])
-                if calculated_age:
-                    extracted['age'] = calculated_age
-                    extracted['age_calculated_from_birthdate'] = True  # Flag per messaggio informativo
-                    print(f"🔍 DEBUG: Età calcolata automaticamente: {calculated_age} anni")
-                break
+                    # Calcola automaticamente l'età dalla data di nascita
+                    calculated_age = calculate_age_from_birthdate(extracted['birth_date'])
+                    if calculated_age:
+                        extracted['age'] = calculated_age
+                        extracted['age_calculated_from_birthdate'] = True
+                        print(f"🔍 DEBUG: Età calcolata automaticamente: {calculated_age} anni")
+                    break
+
+        # PRIORITY 1.5: Se non abbiamo trovato una data, cerca solo l'età
+        if 'birth_date' not in extracted:
+            age_patterns = [
+                r'ho (\d+) anni',
+                r'(\d+) anni',
+                r'età (\d+)',
+                r'sono (\w+) di (\d+) anni'
+            ]
+
+            for pattern in age_patterns:
+                match = re.search(pattern, text_lower)
+                if match:
+                    groups = match.groups()
+                    for group in groups:
+                        if group and group.isdigit():
+                            age = int(group)
+                            if 0 < age < 120:  # Validazione età ragionevole
+                                extracted['age'] = age
+                                # Calcola data di nascita approssimativa
+                                birth_date_approx = calculate_birth_date_from_age(age)
+                                if birth_date_approx:
+                                    extracted['birth_date'] = birth_date_approx
+                                    extracted['birth_date_calculated_from_age'] = True
+                                    print(f"🔍 DEBUG: Età estratta: {age}, data approssimativa: {birth_date_approx}")
+                                break
+                    if 'age' in extracted:
+                        break
 
         # PRIORITY 2: Estrazione nome e cognome CORRETTA
-        # Lista estesa di parole da escludere dai nomi/cognomi
         excluded_words = ['nato', 'nata', 'sono', 'del', 'della', 'di', 'da', 'il', 'la', 'un', 'una', 'che', 'dove',
                           'come', 'chiamo', 'alto', 'alta', 'peso', 'vivo', 'abito', 'palermo', 'roma', 'milano', 'cm',
                           'kg', 'gennaio', 'febbraio', 'marzo', 'aprile', 'maggio', 'giugno', 'luglio', 'agosto',
@@ -1045,9 +709,8 @@ Un momento mentre analizzo le tue preferenze...
                 return False
             if word.lower() in excluded_words:
                 return False
-            # ✅ CORREZIONE: Non escludere "faccio" quando è parte di "di cognome faccio"
             if word.lower() == 'faccio':
-                return False  # "faccio" è un verbo, non un cognome
+                return False
             if any(char.isdigit() for char in word):
                 return False
             if not word.replace(' ', '').isalpha():
@@ -1055,7 +718,6 @@ Un momento mentre analizzo le tue preferenze...
             return True
 
         # Pattern CONSERVATIVI per evitare match errati
-        # 1. Pattern per "mi chiamo Nome Cognome" (sicuro)
         mi_chiamo_pattern = r'mi chiamo ([A-Za-zÀ-ÿ]+)\s+([A-Za-zÀ-ÿ]+(?:\s+[A-Za-zÀ-ÿ]+)*?)(?:\s*[,.]|\s*$)'
         match = re.search(mi_chiamo_pattern, text, re.IGNORECASE)
         if match:
@@ -1071,7 +733,7 @@ Un momento mentre analizzo le tue preferenze...
                 else:
                     print(f"🔍 DEBUG: Solo nome estratto (mi chiamo): {extracted['name']}")
 
-        # 2. Pattern per "sono Nome" (solo nome, conservativo)
+        # Pattern per "sono Nome" (solo nome, conservativo)
         elif re.search(r'\bsono\s+([A-Za-zÀ-ÿ]+)(?:\s+e\s|\s+nato|\s+nata|\s*,)', text, re.IGNORECASE):
             match = re.search(r'\bsono\s+([A-Za-zÀ-ÿ]+)(?:\s+e\s|\s+nato|\s+nata|\s*,)', text, re.IGNORECASE)
             name_candidate = match.group(1).strip()
@@ -1080,7 +742,7 @@ Un momento mentre analizzo le tue preferenze...
                 extracted['name'] = name_candidate.title()
                 print(f"🔍 DEBUG: Solo nome estratto (sono): {extracted['name']}")
 
-        # 3. Pattern per "il mio nome è Nome Cognome"
+        # Pattern per "il mio nome è Nome Cognome"
         elif re.search(r'il mio nome è ([A-Za-zÀ-ÿ]+)(?:\s+([A-Za-zÀ-ÿ]+(?:\s+[A-Za-zÀ-ÿ]+)*))?', text, re.IGNORECASE):
             match = re.search(r'il mio nome è ([A-Za-zÀ-ÿ]+)(?:\s+([A-Za-zÀ-ÿ]+(?:\s+[A-Za-zÀ-ÿ]+)*))?', text,
                               re.IGNORECASE)
@@ -1097,19 +759,14 @@ Un momento mentre analizzo le tue preferenze...
                 else:
                     print(f"🔍 DEBUG: Solo nome estratto (il mio nome è): {extracted['name']}")
 
-        # Pattern separati per cognome (quando fornito esplicitamente) - CORRETTI E MIGLIORATI
+        # Pattern separati per cognome
         surname_patterns = [
-            # Pattern specifico per "di cognome faccio/sono COGNOME"
             r'di cognome (?:faccio|sono|mi chiamo)\s+([A-Za-zÀ-ÿ]+(?:\s+[A-Za-zÀ-ÿ]+){0,3})(?:\s+e\s|\s+nato|\s+nata|\s*,|\s*\.|\s*$)',
-            # Pattern per "cognome è/faccio/sono COGNOME"
             r'cognome\s+(?:è|faccio|sono|mi chiamo)\s+([A-Za-zÀ-ÿ]+(?:\s+[A-Za-zÀ-ÿ]+){0,3})(?:\s+e\s|\s+nato|\s+nata|\s*,|\s*\.|\s*$)',
-            # Pattern per "il mio cognome è COGNOME"
             r'il mio cognome è\s+([A-Za-zÀ-ÿ]+(?:\s+[A-Za-zÀ-ÿ]+){0,3})(?:\s+e\s|\s+nato|\s+nata|\s*,|\s*\.|\s*$)',
-            # Pattern generico per "cognome: COGNOME"
             r'(?:il\s+)?cognome:?\s+([A-Za-zÀ-ÿ]+(?:\s+[A-Za-zÀ-ÿ]+){0,3})(?:\s+e\s|\s+nato|\s+nata|\s*,|\s*\.|\s*$)'
         ]
 
-        # Estrazione cognome separata (solo se non già estratto)
         if not extracted.get('surname'):
             for pattern in surname_patterns:
                 try:
@@ -1118,7 +775,6 @@ Un momento mentre analizzo le tue preferenze...
                         surname_candidate = match.group(1).strip()
                         print(f"🔍 DEBUG: Pattern cognome matched: '{pattern}' → '{surname_candidate}'")
 
-                        # Validazione aggiuntiva: il cognome non può contenere parole della blacklist
                         surname_words = surname_candidate.split()
                         valid_surname_words = []
 
@@ -1126,7 +782,6 @@ Un momento mentre analizzo le tue preferenze...
                             if is_valid_name_part(word):
                                 valid_surname_words.append(word)
                             else:
-                                # Se troviamo una parola non valida, fermati
                                 print(f"🔍 DEBUG: Parola non valida nel cognome: '{word}'")
                                 break
 
@@ -1265,19 +920,17 @@ Un momento mentre analizzo le tue preferenze...
             parts = [p.strip() for p in text.split(',')]
 
             for i, part in enumerate(parts):
-                # Controlla se è una data
-                date_match = re.search(r'\b(\d{1,2}[/\-\.]\d{1,2}[/\-\.]\d{4})\b', part)
-                if date_match and not extracted.get('birth_date'):
-                    date_str = re.sub(r'[-.]', '/', date_match.group(1))
-                    day, month, year = date_str.split('/')
-                    extracted['birth_date'] = f"{day.zfill(2)}/{month.zfill(2)}/{year}"
+                # Controlla se è una data (anche in formato italiano)
+                parsed_date = parse_date_italian(part)
+                if parsed_date and not extracted.get('birth_date'):
+                    extracted['birth_date'] = parsed_date
                     print(f"🔍 DEBUG: Data da input strutturato: {extracted['birth_date']}")
 
-                    # ✅ NUOVO: Calcola l'età anche qui
+                    # Calcola l'età anche qui
                     calculated_age = calculate_age_from_birthdate(extracted['birth_date'])
                     if calculated_age:
                         extracted['age'] = calculated_age
-                        extracted['age_calculated_from_birthdate'] = True  # Flag per messaggio informativo
+                        extracted['age_calculated_from_birthdate'] = True
                         print(f"🔍 DEBUG: Età calcolata da input strutturato: {calculated_age} anni")
 
                 # Controlla se è una città
@@ -1302,12 +955,12 @@ Un momento mentre analizzo le tue preferenze...
         print(f"🔍 DEBUG: Dati estratti finali: {extracted}")
         return extracted
 
-    def _extract_second_data(self, text):
-        """Estrae i dati lifestyle dal secondo messaggio"""
+    def _extract_clinical_data(self, text):
+        """Estrae i dati clinici dal messaggio"""
         extracted = {}
         text_lower = text.lower()
 
-        print(f"🔍 DEBUG: Estrazione secondo messaggio: '{text}'")
+        print(f"🔍 DEBUG: Estrazione dati clinici: '{text}'")
 
         # Estrazione allergie migliorata
         if 'non ho allergie' in text_lower or 'nessuna allergia' in text_lower or 'allergie nessuna' in text_lower:
@@ -1347,69 +1000,6 @@ Un momento mentre analizzo le tue preferenze...
                     extracted['diet'] = diet_text
                     print(f"🔍 DEBUG: Dieta estratta: {extracted['diet']}")
                     break
-
-        # Estrazione motivo/problema
-        purpose_patterns = [
-            r'problema\s+(.*?)(?:\s*\.|$)',
-            r'motivo\s+(.*?)(?:\s*\.|$)',
-            r'consulto.*?per\s+(.*?)(?:\s*\.|$)',
-            r'medico.*?per\s+(.*?)(?:\s*\.|$)',
-            r'soffro\s+di\s+(.*?)(?:\s*\.|$)',
-            r'ho\s+(mal.*?)(?:\s*\.|$)',
-            r'visitare.*?per\s+(.*?)(?:\s*\.|$)'
-        ]
-
-        for pattern in purpose_patterns:
-            match = re.search(pattern, text_lower)
-            if match:
-                purpose_text = match.group(1).strip()
-                if purpose_text and len(purpose_text) > 1:
-                    extracted['purpose'] = purpose_text
-                    print(f"🔍 DEBUG: Motivo estratto: {extracted['purpose']}")
-                    break
-
-        print(f"🔍 DEBUG: Dati secondo messaggio estratti: {extracted}")
-        return extracted
-
-    def _parse_allergies_list(self, allergie_text):
-        """Parsing intelligente delle allergie"""
-        # Pulisci il testo
-        allergie_text = allergie_text.strip()
-
-        # Pattern per separatori
-        separators = [
-            r',\s*e\s+',  # ", e "
-            r'\s+e\s+',  # " e "
-            r',\s*',  # ", "
-            r';\s*',  # "; "
-        ]
-
-        # Sostituisci tutti i separatori con virgole
-        for sep in separators:
-            allergie_text = re.sub(sep, ',', allergie_text)
-
-        # Splitta e pulisci
-        allergie_list = [a.strip() for a in allergie_text.split(',') if a.strip()]
-
-        # Rimuovi duplicati mantenendo l'ordine
-        seen = set()
-        unique_allergie = []
-        for allergia in allergie_list:
-            allergia_clean = allergia.lower().strip()
-            if allergia_clean not in seen and allergia_clean:
-                seen.add(allergia_clean)
-                unique_allergie.append(allergia.title())
-
-        result = ', '.join(unique_allergie) if unique_allergie else 'Nessuna'
-        print(f"🔍 DEBUG: Allergie parsate: '{allergie_text}' → {unique_allergie} → '{result}'")
-        return result
-
-    def _extract_lifestyle_data(self, text):
-        """Estrae i dati lifestyle completi"""
-        extracted = {}
-        text_lower = text.lower()
-
-        print(f"🔍 DEBUG: Estrazione dati lifestyle: '{text}'")
 
         # Estrazione attività fisica FREQUENZA
         activity_frequency_patterns = [
@@ -1501,36 +1091,37 @@ Un momento mentre analizzo le tue preferenze...
                 extracted['smoking_frequency'] = frequency
                 break
 
-        print(f"🔍 DEBUG: Dati lifestyle estratti: {extracted}")
+        print(f"🔍 DEBUG: Dati clinici estratti: {extracted}")
         return extracted
 
     def _check_missing_first_data(self, data):
-        """Controlla quali dati del primo messaggio mancano"""
-        required_fields = ['name', 'surname', 'birth_date', 'sex', 'birth_city', 'city', 'height', 'weight']
+        """Controlla quali dati del primo messaggio mancano - VERSIONE AGGIORNATA"""
+        required_fields = ['name', 'surname', 'sex', 'birth_city', 'city', 'height', 'weight']
         missing = []
 
         for field in required_fields:
             if field not in data or not data[field]:
                 missing.append(field)
 
+        # Logica speciale per età/data di nascita
+        has_birth_date = 'birth_date' in data and data['birth_date']
+        has_age = 'age' in data and data['age']
+
+        if not has_birth_date and not has_age:
+            missing.append('birth_date_or_age')
+        elif has_age and not has_birth_date:
+            # Se ha solo l'età, la data è stata calcolata automaticamente
+            pass
+        elif has_birth_date and not has_age:
+            # Se ha solo la data, l'età è stata calcolata automaticamente
+            pass
+
         return missing
 
-    def _check_missing_second_data(self, data):
-        """Controlla quali dati del secondo messaggio mancano"""
-        required_fields = ['allergies', 'diet', 'purpose']
-        missing = []
-
-        for field in required_fields:
-            if field not in data or not data[field]:
-                missing.append(field)
-
-        return missing
-
-    def _check_missing_lifestyle_data(self, data):
-        """Controlla quali dati lifestyle mancano"""
-        required_fields = ['physical_activity_frequency', 'physical_activity_intensity', 'sleep_hours',
-                           'alcohol_frequency',
-                           'smoking_frequency']
+    def _check_missing_clinical_data(self, data):
+        """Controlla quali dati clinici mancano"""
+        required_fields = ['allergies', 'diet', 'physical_activity_frequency', 'physical_activity_intensity',
+                           'sleep_hours', 'alcohol_frequency', 'smoking_frequency']
         missing = []
 
         for field in required_fields:
@@ -1542,30 +1133,340 @@ Un momento mentre analizzo le tue preferenze...
 
         return missing
 
-    def _format_missing_data(self, missing_fields):
-        """Formatta l'elenco dei dati mancanti del primo messaggio"""
+    def _format_missing_clinical_data(self, missing_fields):
+        """Formatta l'elenco dei dati clinici mancanti"""
         field_names = {
-            'name': 'Nome',
-            'surname': 'Cognome',
-            'birth_date': 'Data di nascita (DD/MM/YYYY)',
-            'sex': 'Sesso (maschio/femmina)',
-            'birth_city': 'Città di nascita',
-            'city': 'Città di residenza attuale',
-            'height': 'Altezza (in cm)',
-            'weight': 'Peso (in kg)'
+            'allergies': 'Allergie (o scrivi "nessuna")',
+            'diet': 'Tipo di dieta',
+            'physical_activity_frequency': 'Frequenza attività fisica (es. "3 volte a settimana", "mai")',
+            'physical_activity_intensity': 'Intensità attività fisica (leggera, moderata, intensa)',
+            'sleep_hours': 'Ore di sonno per notte (es. "7")',
+            'alcohol_frequency': 'Frequenza consumo alcol (mai, raramente, occasionalmente, regolarmente)',
+            'smoking_frequency': 'Abitudine al fumo (mai, occasionalmente, regolarmente, ex fumatore)'
         }
 
-        formatted_list = []
-        for field in missing_fields:
-            field_name = field_names.get(field, field)
+        return '\n'.join([f"• {field_names.get(field, field)}" for field in missing_fields])
 
-            if field == 'city' and hasattr(self, 'partial_first_data') and 'birth_city' in self.partial_first_data:
-                birth_city = self.partial_first_data['birth_city']
-                field_name = f"Città di residenza attuale (vivi ancora a {birth_city}? Se sì scrivi '{birth_city}', altrimenti indica dove vivi ora)"
+    def _parse_comma_separated_clinical_input(self, user_input, missing_fields):
+        """Parsing di input separato da virgole per dati clinici"""
+        parsed = {}
+        parts = [part.strip() for part in user_input.split(',')]
 
-            formatted_list.append(f"• {field_name}")
+        clinical_order = ['allergies', 'diet', 'physical_activity_frequency', 'physical_activity_intensity',
+                          'sleep_hours', 'alcohol_frequency', 'smoking_frequency']
+        ordered_missing = [f for f in clinical_order if f in missing_fields]
 
-        return '\n'.join(formatted_list)
+        for i, part in enumerate(parts):
+            if i < len(ordered_missing):
+                field = ordered_missing[i]
+                part_lower = part.lower()
+
+                if field == 'allergies':
+                    parsed['allergies'] = self._parse_allergies_list(part)
+                elif field == 'diet':
+                    parsed['diet'] = part.lower()
+                elif field == 'physical_activity_frequency':
+                    if 'mai' in part_lower or 'non' in part_lower:
+                        parsed['physical_activity_frequency'] = 'mai'
+                    elif 'giorn' in part_lower or 'tutti' in part_lower:
+                        parsed['physical_activity_frequency'] = 'giornalmente'
+                    elif 'settiman' in part_lower or re.search(r'\d+.*settiman', part_lower):
+                        parsed['physical_activity_frequency'] = 'settimanalmente'
+                    else:
+                        parsed['physical_activity_frequency'] = part_lower
+                elif field == 'physical_activity_intensity':
+                    if 'leggera' in part_lower or 'bassa' in part_lower:
+                        parsed['physical_activity_intensity'] = 'leggera'
+                    elif 'moderata' in part_lower or 'media' in part_lower:
+                        parsed['physical_activity_intensity'] = 'moderata'
+                    elif 'intensa' in part_lower or 'alta' in part_lower:
+                        parsed['physical_activity_intensity'] = 'intensa'
+                    else:
+                        parsed['physical_activity_intensity'] = part_lower
+                elif field == 'sleep_hours':
+                    hours_match = re.search(r'(\d+)', part)
+                    if hours_match:
+                        parsed['sleep_hours'] = int(hours_match.group(1))
+                elif field == 'alcohol_frequency':
+                    if 'mai' in part_lower or 'non' in part_lower:
+                        parsed['alcohol_frequency'] = 'mai'
+                    elif 'raram' in part_lower:
+                        parsed['alcohol_frequency'] = 'raramente'
+                    elif 'occasion' in part_lower:
+                        parsed['alcohol_frequency'] = 'occasionalmente'
+                    elif 'regolar' in part_lower:
+                        parsed['alcohol_frequency'] = 'regolarmente'
+                    else:
+                        parsed['alcohol_frequency'] = part_lower
+                elif field == 'smoking_frequency':
+                    if 'mai' in part_lower or 'non' in part_lower:
+                        parsed['smoking_frequency'] = 'mai'
+                    elif 'ex' in part_lower or 'smesso' in part_lower:
+                        parsed['smoking_frequency'] = 'ex fumatore'
+                    elif 'occasion' in part_lower or 'raram' in part_lower:
+                        parsed['smoking_frequency'] = 'occasionalmente'
+                    elif 'regolar' in part_lower or 'spesso' in part_lower:
+                        parsed['smoking_frequency'] = 'regolarmente'
+                    else:
+                        parsed['smoking_frequency'] = part_lower
+
+        print(f"🔧 DEBUG: Dati clinici comma-separated parsati: {parsed}")
+        return parsed
+
+    def _parse_allergies_list(self, allergie_text):
+        """Parsing intelligente delle allergie"""
+        # Pulisci il testo
+        allergie_text = allergie_text.strip()
+
+        if allergie_text.lower() in ['nessuna', 'no', 'nessuno', 'niente']:
+            return 'Nessuna'
+
+        # Pattern per separatori
+        separators = [
+            r',\s*e\s+',  # ", e "
+            r'\s+e\s+',  # " e "
+            r',\s*',  # ", "
+            r';\s*',  # "; "
+        ]
+
+        # Sostituisci tutti i separatori con virgole
+        for sep in separators:
+            allergie_text = re.sub(sep, ',', allergie_text)
+
+        # Splitta e pulisci
+        allergie_list = [a.strip() for a in allergie_text.split(',') if a.strip()]
+
+        # Rimuovi duplicati mantenendo l'ordine
+        seen = set()
+        unique_allergie = []
+        for allergia in allergie_list:
+            allergia_clean = allergia.lower().strip()
+            if allergia_clean not in seen and allergia_clean:
+                seen.add(allergia_clean)
+                unique_allergie.append(allergia.title())
+
+        result = ', '.join(unique_allergie) if unique_allergie else 'Nessuna'
+        print(f"🔍 DEBUG: Allergie parsate: '{allergie_text}' → {unique_allergie} → '{result}'")
+        return result
+
+    def _process_missing_first_data(self, user_input):
+        """Processa i dati mancanti del primo messaggio - VERSIONE MIGLIORATA"""
+        self.first_data_attempts += 1
+
+        # Dopo 2 tentativi, passa al formato strutturato
+        if self.first_data_attempts > self.max_attempts:
+            return self._handle_structured_input_first_data(user_input)
+
+        # Prova estrazione normale
+        additional_data = self._extract_first_data(user_input)
+
+        # Fallback intelligente per singoli campi
+        if not additional_data and self.missing_fields:
+            additional_data = self._extract_single_field(user_input)
+
+        self.partial_first_data.update(additional_data)
+        missing_data = self._check_missing_first_data(self.partial_first_data)
+
+        if missing_data:
+            self.missing_fields = missing_data
+
+            if self.first_data_attempts == self.max_attempts:
+                missing_message = f"""
+Mi mancano ancora questi dati:
+
+{self._format_missing_data(missing_data)}
+
+⚠️ Se ho difficoltà a capire la prossima volta, ti chiederò di usare un formato più semplice.
+Per favore, prova ancora a fornirmeli.
+                """
+            else:
+                missing_message = f"""
+Mi mancano ancora questi dati:
+
+{self._format_missing_data(missing_data)}
+
+Per favore forniscimeli.
+                """
+            return False, missing_message.strip(), None
+        else:
+            # Completa i dati e passa al motivo della visita
+            return self._complete_first_data_collection()
+
+    def _extract_single_field(self, user_input):
+        """Estrae singoli campi quando mancano specifici dati"""
+        extracted = {}
+        user_input_clean = user_input.strip()
+
+        if len(self.missing_fields) == 1:
+            field = self.missing_fields[0]
+
+            if field == 'surname':
+                surname_simple_patterns = [
+                    r'^([A-Za-zÀ-ÿ\s]+)',
+                ]
+                for pattern in surname_simple_patterns:
+                    match = re.search(pattern, user_input_clean)
+                    if match and len(match.group(1).strip()) > 1:
+                        extracted['surname'] = match.group(1).strip().title()
+                        break
+
+            elif field == 'birth_date_or_age':
+                # Prova prima la data, poi l'età
+                parsed_date = parse_date_italian(user_input_clean)
+                if parsed_date:
+                    extracted['birth_date'] = parsed_date
+                    calculated_age = calculate_age_from_birthdate(parsed_date)
+                    if calculated_age:
+                        extracted['age'] = calculated_age
+                        extracted['age_calculated_from_birthdate'] = True
+                else:
+                    # Prova l'età
+                    age_match = re.search(r'(\d+)', user_input_clean)
+                    if age_match:
+                        age = int(age_match.group(1))
+                        if 0 < age < 120:
+                            extracted['age'] = age
+                            birth_date_approx = calculate_birth_date_from_age(age)
+                            if birth_date_approx:
+                                extracted['birth_date'] = birth_date_approx
+                                extracted['birth_date_calculated_from_age'] = True
+
+            elif field in ['city', 'birth_city']:
+                italian_cities = [
+                    'roma', 'milano', 'napoli', 'torino', 'palermo', 'genova',
+                    'bologna', 'firenze', 'bari', 'catania', 'venezia', 'verona',
+                    'messina', 'padova', 'trieste', 'brescia', 'parma', 'modena'
+                ]
+
+                potential_city = user_input_clean.lower()
+                if potential_city in italian_cities:
+                    extracted[field] = potential_city.title()
+
+            elif field == 'height':
+                height_match = re.search(r'(\d+)(?:\s*cm)?', user_input_clean)
+                if height_match:
+                    height = int(height_match.group(1))
+                    if 120 <= height <= 250:
+                        extracted['height'] = str(height)
+
+            elif field == 'weight':
+                weight_match = re.search(r'(\d+)(?:\s*kg)?', user_input_clean)
+                if weight_match:
+                    weight = int(weight_match.group(1))
+                    if 30 <= weight <= 300:
+                        extracted['weight'] = str(weight)
+
+            elif field == 'sex':
+                sex_lower = user_input_clean.lower()
+                if sex_lower in ['m', 'maschio', 'uomo', 'male']:
+                    extracted['sex'] = 'M'
+                elif sex_lower in ['f', 'femmina', 'donna', 'female']:
+                    extracted['sex'] = 'F'
+
+        return extracted
+
+    def _handle_structured_input_first_data(self, user_input):
+        """Gestisce input strutturato per i dati del primo messaggio"""
+        print(f"🔧 DEBUG: Passaggio a formato strutturato per: {self.missing_fields}")
+
+        parsed_data = self._parse_comma_separated_input(user_input, self.missing_fields)
+
+        if parsed_data:
+            self.partial_first_data.update(parsed_data)
+            missing_data = self._check_missing_first_data(self.partial_first_data)
+
+            if not missing_data:
+                return self._complete_first_data_collection()
+
+        # Se ancora mancano dati, chiedi formato strutturato
+        examples = []
+        field_order = ['surname', 'birth_date_or_age', 'sex', 'birth_city', 'city', 'height', 'weight']
+
+        for field in field_order:
+            if field in self.missing_fields:
+                if field == 'surname':
+                    examples.append('Rossi')
+                elif field == 'birth_date_or_age':
+                    examples.append('15/03/1990 oppure 34 anni')
+                elif field == 'sex':
+                    examples.append('M')
+                elif field == 'birth_city':
+                    examples.append('Roma')
+                elif field == 'city':
+                    examples.append('Milano')
+                elif field == 'height':
+                    examples.append('175')
+                elif field == 'weight':
+                    examples.append('70')
+
+        structured_message = f"""
+Mi scuso, non riesco ancora a capire perfettamente! 😅
+
+Scrivi semplicemente i dati mancanti separati da virgole, in questo ordine:
+
+{', '.join(examples)}
+
+Esempio per i tuoi dati mancanti: {', '.join(examples[:len(self.missing_fields)])}
+        """
+
+        return False, structured_message.strip(), None
+
+    def _parse_comma_separated_input(self, user_input, missing_fields):
+        """Parsing di input separato da virgole per primi dati"""
+        parsed = {}
+        parts = [part.strip() for part in user_input.split(',')]
+
+        field_order = ['surname', 'birth_date_or_age', 'sex', 'birth_city', 'city', 'height', 'weight']
+        ordered_missing = [f for f in field_order if f in missing_fields]
+
+        for i, part in enumerate(parts):
+            if i < len(ordered_missing):
+                field = ordered_missing[i]
+
+                if field == 'surname':
+                    if len(part) > 1:
+                        parsed['surname'] = part.title()
+                elif field == 'birth_date_or_age':
+                    # Prova prima come data
+                    parsed_date = parse_date_italian(part)
+                    if parsed_date:
+                        parsed['birth_date'] = parsed_date
+                        calculated_age = calculate_age_from_birthdate(parsed_date)
+                        if calculated_age:
+                            parsed['age'] = calculated_age
+                            parsed['age_calculated_from_birthdate'] = True
+                    else:
+                        # Prova come età
+                        age_match = re.search(r'(\d+)', part)
+                        if age_match:
+                            age = int(age_match.group(1))
+                            if 0 < age < 120:
+                                parsed['age'] = age
+                                birth_date_approx = calculate_birth_date_from_age(age)
+                                if birth_date_approx:
+                                    parsed['birth_date'] = birth_date_approx
+                                    parsed['birth_date_calculated_from_age'] = True
+                elif field == 'sex':
+                    if part.upper() in ['M', 'F', 'MASCHIO', 'FEMMINA', 'UOMO', 'DONNA']:
+                        parsed['sex'] = 'M' if part.upper() in ['M', 'MASCHIO', 'UOMO'] else 'F'
+                elif field in ['birth_city', 'city']:
+                    if len(part) > 1:
+                        parsed[field] = part.title()
+                elif field == 'height':
+                    height_match = re.search(r'(\d+)', part)
+                    if height_match:
+                        height = int(height_match.group(1))
+                        if 120 <= height <= 250:
+                            parsed['height'] = str(height)
+                elif field == 'weight':
+                    weight_match = re.search(r'(\d+)', part)
+                    if weight_match:
+                        weight = int(weight_match.group(1))
+                        if 30 <= weight <= 300:
+                            parsed['weight'] = str(weight)
+
+        print(f"🔧 DEBUG: Dati comma-separated primi dati parsati: {parsed}")
+        return parsed
 
     def _populate_patient_first_data(self):
         """Popola i dati del primo messaggio nel paziente"""
@@ -1588,11 +1489,88 @@ Un momento mentre analizzo le tue preferenze...
         if 'weight' in data:
             self.patient.set_weight(float(data['weight']))
 
+    def _populate_patient_clinical_data(self):
+        """Popola i dati clinici nel paziente"""
+        data = self.registration_data
+
+        if 'allergies' in data:
+            self.patient.set_allergies(data['allergies'])
+
+        # Recupera il lifestyle esistente o crea nuovo
+        existing_lifestyle = self.patient.get_lifestyle() or {}
+
+        # Mappa i campi lifestyle
+        lifestyle_mapping = {
+            'diet': 'typeOfDiet',
+            'physical_activity_frequency': 'physicalActivityFrequency',
+            'physical_activity_intensity': 'physicalActivityIntensity',
+            'sleep_hours': 'hoursOfSleep',
+            'alcohol_frequency': 'alcoholFrequency',
+            'smoking_frequency': 'smokerFrequency'
+        }
+
+        # Aggiorna lifestyle con i nuovi dati
+        for extracted_field, model_field in lifestyle_mapping.items():
+            if extracted_field in data:
+                existing_lifestyle[model_field] = data[extracted_field]
+
+        # Imposta lifestyle completo
+        self.patient.set_lifestyle(existing_lifestyle)
+        print(f"🔍 DEBUG: Lifestyle completo impostato: {existing_lifestyle}")
+
+    def _process_preference_answer(self, user_input):
+        """Processa le risposte alle domande sulle preferenze"""
+        current_question = self.preference_questions[self.current_step]
+        field = current_question["field"]
+
+        try:
+            rating = int(user_input.strip())
+            if not (1 <= rating <= 5):
+                return False, "Per favore inserisci un numero da 1 a 5:", current_question["question"]
+
+            self.preferences_data[field] = rating
+
+        except ValueError:
+            return False, "Per favore inserisci un numero da 1 a 5:", current_question["question"]
+
+        self.current_step += 1
+
+        if self.current_step >= len(self.preference_questions):
+            return self._complete_registration()
+
+        return False, "Grazie!", self._get_current_question()
+
+    def _complete_registration(self):
+        """Completa la registrazione e avvia la ricerca semantica"""
+        try:
+            self._populate_patient_all_data()
+
+            complete_notes = self._create_complete_notes()
+            self.patient.set_additional_notes(complete_notes)
+
+            patient_id = self.patient_db.save_patient(self.patient)
+
+            if patient_id:
+                success_message = """
+✅ Registrazione completata con successo!
+
+Il tuo profilo è stato salvato e ora procederò con la ricerca del medico più adatto alle tue esigenze utilizzando l'intelligenza artificiale.
+
+Un momento mentre analizzo le tue preferenze...
+                """
+
+                return True, success_message.strip(), None
+            else:
+                return False, "Errore nel salvataggio. Riprova.", None
+
+        except Exception as e:
+            print(f"❌ Errore nella registrazione: {e}")
+            return False, "Si è verificato un errore. Riprova.", None
+
     def _populate_patient_all_data(self):
         """Popola tutti i dati del paziente"""
-        # Questo metodo chiama tutti i metodi di popolamento
         self._populate_patient_first_data()
-        self._populate_patient_all_lifestyle_data()
+        self._populate_patient_clinical_data()
 
     def _get_current_question(self):
         """Ottiene la domanda corrente"""
@@ -1605,41 +1583,81 @@ Un momento mentre analizzo le tue preferenze...
         return None
 
     def _create_motivation_summary(self):
-        """Crea un riassunto narrativo delle risposte motivazionali"""
+        """Crea un riassunto narrativo migliorato delle risposte motivazionali - VERSIONE CORRETTA"""
+        name = self.patient.get_name() if self.patient and self.patient.get_name() else "L'utente"
+
         summary_parts = []
 
-        # Crea un resoconto narrativo invece di elenchi puntati
+        # Messaggio di apertura personalizzato
+        display_name = name.replace("L'utente", "utente") if name == "L'utente" else name
+        summary_parts.append(f"Perfetto, {display_name}! Ho capito cosa ti ha portato qui:")
+
+        # Crea un resoconto narrativo CORRETTO in terza persona
         if 'download_reason' in self.motivation_data:
             reasons = self.motivation_data['download_reason']
-            if len(reasons) == 1:
-                reason_text = f"Hai scaricato Longeviva perché {reasons[0].lower()}."
-            elif len(reasons) == 2:
-                reason_text = f"Hai scaricato Longeviva perché {reasons[0].lower()} e {reasons[1].lower()}."
+            # CORREZIONE: Trasforma in terza persona
+            reason_transformations = {
+                "Voglio migliorare il mio stile di vita con un supporto pratico e costante": "vuoi migliorare il tuo stile di vita con un supporto pratico e costante",
+                "Ho bisogno di un aiuto concreto per rimettermi in forma": "hai bisogno di un aiuto concreto per rimetterti in forma",
+                "Cerco un modo semplice per mangiare meglio e muovermi di più": "cerchi un modo semplice per mangiare meglio e muoverti di più",
+                "Mi interessa la longevità e voglio prendermi cura della mia salute oggi": "sei interessato alla longevità e vuoi prenderti cura della tua salute oggi",
+                "Mi ha incuriosito l'approccio innovativo con l'AI e la community": "sei incuriosito dall'approccio innovativo con l'AI e la community"
+            }
+
+            transformed_reasons = [reason_transformations.get(r, r.lower()) for r in reasons]
+
+            if len(transformed_reasons) == 1:
+                reason_text = f"Hai scelto Longeviva perché {transformed_reasons[0]}."
+            elif len(transformed_reasons) == 2:
+                reason_text = f"Hai scelto Longeviva perché {transformed_reasons[0]} e {transformed_reasons[1]}."
             else:
-                reason_text = f"Hai scaricato Longeviva perché {', '.join([r.lower() for r in reasons[:-1]])} e {reasons[-1].lower()}."
+                reason_text = f"Hai scelto Longeviva perché {', '.join(transformed_reasons[:-1])} e {transformed_reasons[-1]}."
             summary_parts.append(reason_text)
 
         if 'objectives' in self.motivation_data:
             objectives = self.motivation_data['objectives']
-            if len(objectives) == 1:
-                obj_text = f"Il tuo obiettivo principale è {objectives[0].lower()}."
-            elif len(objectives) == 2:
-                obj_text = f"I tuoi obiettivi principali sono {objectives[0].lower()} e {objectives[1].lower()}."
+            # CORREZIONE: Trasforma in terza persona
+            objective_transformations = {
+                "Perdere peso in modo sano e sostenibile": "perdere peso in modo sano e sostenibile",
+                "Avere più energia durante la giornata": "avere più energia durante la giornata",
+                "Migliorare la mia composizione corporea": "migliorare la tua composizione corporea",
+                "Aumentare la mia consapevolezza alimentare": "aumentare la tua consapevolezza alimentare",
+                "Vivere più a lungo e in salute": "vivere più a lungo e in salute",
+                "Sentirmi meglio fisicamente e mentalmente": "sentirti meglio fisicamente e mentalmente"
+            }
+
+            transformed_objectives = [objective_transformations.get(o, o.lower()) for o in objectives]
+
+            if len(transformed_objectives) == 1:
+                obj_text = f"Il suo obiettivo principale è {transformed_objectives[0]}."
+            elif len(transformed_objectives) == 2:
+                obj_text = f"I suoi obiettivi principali sono {transformed_objectives[0]} e {transformed_objectives[1]}."
             else:
-                obj_text = f"I tuoi obiettivi principali sono {', '.join([o.lower() for o in objectives[:-1]])} e {objectives[-1].lower()}."
+                obj_text = f"I suoi obiettivi principali sono {', '.join(transformed_objectives[:-1])} e {transformed_objectives[-1]}."
             summary_parts.append(obj_text)
 
         if 'expectations' in self.motivation_data:
             expectations = self.motivation_data['expectations']
-            if len(expectations) == 1:
-                exp_text = f"Ti aspetti {expectations[0].lower()}."
-            elif len(expectations) == 2:
-                exp_text = f"Ti aspetti {expectations[0].lower()} e {expectations[1].lower()}."
+            # CORREZIONE: Trasforma in terza persona
+            expectation_transformations = {
+                "Un percorso personalizzato e facile da seguire": "un percorso personalizzato e facile da seguire",
+                "Consigli pratici, non complicati": "consigli pratici, non complicati",
+                "Sentirmi seguito/a da chi capisce le mie esigenze": "sentirti seguito da chi capisce le tue esigenze",
+                "Imparare abitudini che durino nel tempo": "imparare abitudini che durino nel tempo",
+                "Un'esperienza motivante che mi tenga attivo/a e coinvolto/a": "un'esperienza motivante che yi tenga attivo e coinvolto"
+            }
+
+            transformed_expectations = [expectation_transformations.get(e, e.lower()) for e in expectations]
+
+            if len(transformed_expectations) == 1:
+                exp_text = f"Si aspetta {transformed_expectations[0]}."
+            elif len(transformed_expectations) == 2:
+                exp_text = f"Si aspetta {transformed_expectations[0]} e {transformed_expectations[1]}."
             else:
-                exp_text = f"Ti aspetti {', '.join([e.lower() for e in expectations[:-1]])} e {expectations[-1].lower()}."
+                exp_text = f"Si aspetta {', '.join(transformed_expectations[:-1])} e {transformed_expectations[-1]}."
             summary_parts.append(exp_text)
 
-        return " ".join(summary_parts)
+        return "\n\n".join(summary_parts)
 
     def _create_complete_notes(self):
         """Crea le note complete con obiettivi e preferenze"""
@@ -1675,6 +1693,31 @@ Un momento mentre analizzo le tue preferenze...
             return f"{year}-{month.zfill(2)}-{day.zfill(2)}T00:00:00.000"
         except:
             return date_str
+
+    def _format_missing_data(self, missing_fields):
+        """Formatta l'elenco dei dati mancanti del primo messaggio - VERSIONE AGGIORNATA"""
+        field_names = {
+            'name': 'Nome',
+            'surname': 'Cognome',
+            'birth_date_or_age': 'Data di nascita (DD/MM/YYYY o "28 gennaio 1990") oppure età',
+            'sex': 'Sesso (maschio/femmina)',
+            'birth_city': 'Città di nascita',
+            'city': 'Città di residenza attuale',
+            'height': 'Altezza (in cm)',
+            'weight': 'Peso (in kg)'
+        }
+
+        formatted_list = []
+        for field in missing_fields:
+            field_name = field_names.get(field, field)
+
+            if field == 'city' and hasattr(self, 'partial_first_data') and 'birth_city' in self.partial_first_data:
+                birth_city = self.partial_first_data['birth_city']
+                field_name = f"Città di residenza attuale (vivi ancora a {birth_city}? Se sì scrivi '{birth_city}', altrimenti indica dove vivi ora)"
+
+            formatted_list.append(f"• {field_name}")
+
+        return '\n'.join(formatted_list)
 
     def get_preferences(self):
         """Restituisce le preferenze raccolte per la ricerca semantica"""

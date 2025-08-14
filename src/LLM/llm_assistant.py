@@ -208,6 +208,10 @@ class LLMAssistant:
         self.recommended_doctor = None
         self.registration_handler = None
 
+        self.booking_attempts = 0
+        self.max_booking_attempts = 3
+        self.user_proposed_dates = []
+
         print("✅ Sistema pronto!")
 
     def _load_doctors(self):
@@ -317,21 +321,119 @@ class LLMAssistant:
         self.recommend_doctor()
 
     def handle_appointment_booking(self, user_input):
-        """Gestisce prenotazione appuntamento"""
+        """Gestisce prenotazione appuntamento - VERSIONE CORRETTA"""
         if any(word in user_input.lower() for word in ["sì", "si", "prenota", "appuntamento"]):
-            slots = ["Domani alle 10:00", "Dopodomani alle 15:30", "Venerdì alle 9:15"]
 
-            print(f"\nAssistente: Disponibilità Dr. {self.recommended_doctor.get_surname()}:")
-            for i, slot in enumerate(slots, 1):
-                print(f"{i}. {slot}")
-            print("\nQuale preferisci? (1, 2 o 3)")
+            print(f"\nAssistente: Perfetto! Procediamo con la prenotazione.")
+            print(f"Dr. {self.recommended_doctor.get_surname()} è disponibile per visite.")
+            print(f"")
+            print(f"Quando preferiresti fare la visita?")
+            print(f"Proponi pure una data e un orario (es. 'Lunedì 15 gennaio alle 10:00' o 'Mercoledì pomeriggio').")
 
-            self.conversation_state = "booking_slot_selection"
+            self.conversation_state = "booking_date_proposal"
+            self.booking_attempts = 0
+
         else:
             print(
                 f"\nAssistente: Il Dr. {self.recommended_doctor.get_surname()} è specializzato in {self.recommended_doctor.get_specialization()}.")
             print("Ha ottime recensioni e molta esperienza nel suo campo.")
             print("Vuoi prenotare un appuntamento?")
+
+    def handle_date_proposal(self, user_input):
+        """Gestisce le proposte di data dell'utente - NUOVO METODO"""
+        self.booking_attempts += 1
+        self.user_proposed_dates.append(user_input)
+
+        # Simula verifica disponibilità (in un sistema reale, qui controlleresti il calendario del medico)
+        is_available = self._check_doctor_availability(user_input)
+
+        if is_available:
+            # Data disponibile - conferma prenotazione
+            booking_id = f"BOOK-{random.randint(10000, 99999)}"
+
+            print(f"\n✅ Ottima notizia! Il Dr. {self.recommended_doctor.get_surname()} è disponibile per {user_input}.")
+            print(f"")
+            print(f"📅 **PRENOTAZIONE CONFERMATA:**")
+            print(f"• Dr. {self.recommended_doctor.get_full_name()}")
+            print(f"• Data e ora: {user_input}")
+            print(f"• Numero prenotazione: {booking_id}")
+            print(f"• Indirizzo: {self.recommended_doctor.get_address()}")
+            print(f"• Telefono studio: {self.recommended_doctor.get_phone() or '06-12345678'}")
+            print(f"")
+            print(
+                f"Riceverai una conferma via email. Ti ricordiamo di portare con te un documento di identità e la tessera sanitaria.")
+
+            self.conversation_state = "booking_confirmed"
+
+        else:
+            # Data non disponibile
+            if self.booking_attempts >= self.max_booking_attempts:
+                # Dopo 3 tentativi, invita a contattare via email
+                doctor_email = self.recommended_doctor.get_email() or "info@longeviva.it"
+
+                print(
+                    f"\nMi dispiace, dopo {self.max_booking_attempts} tentativi non sono riuscito a trovare una disponibilità compatibile.")
+                print(f"")
+                print(f"Ti invito a contattare direttamente il Dr. {self.recommended_doctor.get_surname()} via email:")
+                print(f"📧 **{doctor_email}**")
+                print(f"")
+                print(f"Nella email, specifica:")
+                print(f"• Il tuo nome: {self.patient.get_name()} {self.patient.get_surname()}")
+                print(f"• Le date che hai proposto: {', '.join(self.user_proposed_dates)}")
+                print(f"• Il motivo della visita: {self.patient.get_purpose()}")
+                print(f"")
+                print(f"Il dottore ti risponderà entro 24 ore con le sue disponibilità.")
+
+                self.conversation_state = "booking_failed"
+
+            else:
+                # Proponi di riprovare
+                attempts_left = self.max_booking_attempts - self.booking_attempts
+
+                print(
+                    f"\nMi dispiace, il Dr. {self.recommended_doctor.get_surname()} non è disponibile per {user_input}.")
+                print(f"")
+                if attempts_left > 1:
+                    print(f"Hai ancora {attempts_left} tentativi. Puoi proporre un'altra data?")
+                    print(f"Magari prova con giorni diversi o orari alternativi.")
+                else:
+                    print(f"Hai ancora {attempts_left} tentativo. Vuoi proporre un'altra data?")
+
+    def _check_doctor_availability(self, proposed_date):
+        """Simula il controllo della disponibilità del medico"""
+        # In un sistema reale, qui faresti una query al database degli appuntamenti
+        # Per ora simuliamo: 70% di probabilità che sia disponibile
+        import random
+        return random.random() > 0.3 # 70% di successo
+
+    def process_user_input(self, user_input):
+        """Processa l'input dell'utente in base allo stato - AGGIORNATO"""
+        if self.conversation_state == "structured_registration":
+            self.handle_registration(user_input)
+        elif self.conversation_state == "collect_purpose":
+            self.handle_purpose_collection(user_input)
+        elif self.conversation_state == "doctor_recommendation_provided":
+            self.handle_appointment_booking(user_input)
+        elif self.conversation_state == "booking_date_proposal":  # NUOVO
+            self.handle_date_proposal(user_input)
+        elif self.conversation_state == "booking_confirmed":  # NUOVO
+            self.handle_post_booking(user_input)
+        elif self.conversation_state == "booking_failed":  # NUOVO
+            self.handle_booking_failure(user_input)
+        else:
+            self.handle_generic_response(user_input)
+
+    def handle_post_booking(self, user_input):
+        """Gestisce la conversazione dopo la prenotazione confermata"""
+        print("\nAssistente: C'è altro in cui posso aiutarti?")
+        print("Puoi sempre tornare su Longeviva per gestire i tuoi appuntamenti o per prenotare altre visite.")
+
+    def handle_booking_failure(self, user_input):
+        """Gestisce la conversazione dopo il fallimento della prenotazione"""
+        print("\nAssistente: Spero che il Dr. {} possa trovarti un appuntamento presto!".format(
+            self.recommended_doctor.get_surname()
+        ))
+        print("C'è altro in cui posso aiutarti oggi?")
 
     def handle_slot_selection(self, user_input):
         """Gestisce selezione slot appuntamento"""
@@ -514,18 +616,36 @@ class LLMAssistant:
         return [doctor for doctor, score in scored_doctors]
 
     def _generate_personalized_recommendation(self, ranked_doctors, preferences, motivation_data):
-        """
-        Genera una raccomandazione personalizzata basata su tutti i dati raccolti
-        """
+        """Genera una raccomandazione personalizzata basata su tutti i dati raccolti - VERSIONE CORRETTA"""
         name = self.patient.get_name() or "utente"
 
-        # Crea messaggio personalizzato basato sulle motivazioni
+        # Crea messaggio personalizzato basato sulle motivazioni - CORRETTO
         motivation_text = ""
         if 'objectives' in motivation_data:
             objectives = motivation_data['objectives']
-            motivation_text = f"\n🎯 Considerando i tuoi obiettivi ({', '.join(objectives[:2])}{'...' if len(objectives) > 2 else ''})"
+            # Trasforma in terza persona per il messaggio del sistema
+            obj_summary = []
+            for obj in objectives[:2]:  # Prendi solo i primi 2 per brevità
+                if "Perdere peso" in obj:
+                    obj_summary.append("perdere peso")
+                elif "Avere più energia" in obj:
+                    obj_summary.append("avere più energia")
+                elif "Migliorare" in obj:
+                    obj_summary.append("migliorare la composizione corporea")
+                elif "Aumentare" in obj:
+                    obj_summary.append("aumentare la consapevolezza alimentare")
+                elif "Vivere" in obj:
+                    obj_summary.append("vivere più a lungo")
+                elif "Sentirmi" in obj:
+                    obj_summary.append("sentirsi meglio")
 
-        # Crea informazioni sui medici trovati
+            if obj_summary:
+                if len(obj_summary) == 1:
+                    motivation_text = f"\n🎯 Considerando il tuo obiettivo di {obj_summary[0]}"
+                else:
+                    motivation_text = f"\n🎯 Considerando i tuoi obiettivi di {obj_summary[0]} e {obj_summary[1]}"
+
+        # Resto del metodo rimane uguale...
         doctors_info = []
         for i, doctor in enumerate(ranked_doctors, 1):
             city_info = getattr(doctor, 'city_of_work', doctor.get_city())
@@ -549,10 +669,10 @@ class LLMAssistant:
             pref_text = " • " + " • ".join(pref_notes) if pref_notes else ""
 
             doctors_info.append(f"""
-{i}. 👨‍⚕️ **{doctor.get_full_name()}**
-   🏥 {doctor.get_specialization()}
-   📍 {city_info}
-   ⏱️ {doctor.get_years_of_experience()} anni{pref_text}
+    {i}. 👨‍⚕️ **{doctor.get_full_name()}**
+       🏥 {doctor.get_specialization()}
+       📍 {city_info}
+       ⏱️ {doctor.get_years_of_experience()} anni{pref_text}
             """)
 
         # Crea spiegazione personalizzata delle preferenze
@@ -571,32 +691,24 @@ class LLMAssistant:
             if pref_parts:
                 pref_explanation = f"\n💡 Ho dato priorità a {', '.join(pref_parts)} come hai indicato."
 
-        # Genera il messaggio completo
-        system_prompt = """
-        Sei Longi di Longeviva con intelligenza artificiale avanzata. 
-        Hai appena completato un'analisi completa del profilo del paziente.
-        Presenta i risultati in modo professionale, personalizzato e rassicurante.
+        # Genera il messaggio completo - MIGLIORATO
+        message = f"""
+    Perfetto, {name}! Ho completato l'analisi del tuo profilo utilizzando l'intelligenza artificiale.
+    {motivation_text}
+
+    🧠 **RACCOMANDAZIONI AI PERSONALIZZATE:**
+    {''.join(doctors_info)}
+
+    🎯 **Raccomandazione principale:** Il **Dr. {self.recommended_doctor.get_surname()}** è la scelta ottimale per te.
+    {pref_explanation}
+
+    Il sistema ha analizzato semanticamente il tuo problema "{self.patient.get_purpose()}" 
+    e ha considerato tutte le tue preferenze per trovare la migliore corrispondenza.
+
+    Vuoi prenotare un appuntamento con il Dr. {self.recommended_doctor.get_surname()}?
         """
 
-        prompt = f"""
-Perfetto, {name}! Ho completato l'analisi del tuo profilo utilizzando l'intelligenza artificiale.
-{motivation_text}
-
-🧠 **RACCOMANDAZIONI AI PERSONALIZZATE:**
-{''.join(doctors_info)}
-
-🎯 **Raccomandazione principale:** Il **Dr. {self.recommended_doctor.get_surname()}** è la scelta ottimale per te.
-{pref_explanation}
-
-Il sistema ha analizzato semanticamente il tuo problema "{self.patient.get_purpose()}" 
-e ha considerato tutte le tue preferenze per trovare la migliore corrispondenza.
-
-Vuoi che ti aiuti a prenotare un appuntamento con il Dr. {self.recommended_doctor.get_surname()}, 
-o preferisci avere maggiori informazioni su uno degli altri specialisti?
-        """
-
-        response, _ = self.llm.generate_response(prompt, system_prompt)
-        print(f"\nAssistente: {response}")
+        print(f"\nAssistente: {message}")
 
         # Aggiorna stato conversazione
         self.conversation_state = "doctor_recommendation_provided"
