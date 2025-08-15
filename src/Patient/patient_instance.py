@@ -299,3 +299,43 @@ class Patient:
 
     def set_diet_type(self, diet_type):
         self.set_lifestyle_field('typeOfDiet', diet_type)
+
+    def get_full_name(self):
+        """Restituisce il nome completo del paziente"""
+        if self.name and self.surname:
+            return f"{self.name} {self.surname}"
+        elif self.name:
+            return self.name
+        elif self.surname:
+            return self.surname
+        else:
+            return "Nome non disponibile"
+
+    def get_years_of_experience(self):
+        """Metodo per compatibilità - non applicabile ai pazienti"""
+        return 0
+
+    def get_specialization(self):
+        """Metodo per compatibilità - non applicabile ai pazienti"""
+        return "Paziente"
+
+    def get_address(self):
+        """Restituisce l'indirizzo se disponibile"""
+        if hasattr(self, 'address') and self.address:
+            return self.address
+        elif self.city:
+            return self.city
+        else:
+            return "Indirizzo non disponibile"
+
+    def get_phone_number(self):
+        """Alias per get_phone()"""
+        return self.get_phone()
+
+    def __str__(self):
+        """Rappresentazione stringa del paziente"""
+        return f"Paziente: {self.get_full_name()}"
+
+    def __repr__(self):
+        """Rappresentazione per debug"""
+        return f"Patient(name='{self.name}', surname='{self.surname}', email='{self.email}')"
