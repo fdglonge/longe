@@ -399,23 +399,52 @@ class IntelligentInputClassifier:
         if debug:
             print(f"📊 DEBUG: Punteggi categorie: {scores}")
 
-        # Step 3: Determina la categoria migliore
+        # Step 3: Controlla pattern specifici per data_query PRIMA della logica generale
+        corrected_lower = corrected_text.lower()
+        original_lower = user_input.lower()
+
+        # Pattern espliciti per data_query - QUESTI HANNO PRIORITÀ ASSOLUTA
+        explicit_data_patterns = [
+            # Peso
+            r'\b(quanto\s+peso|peso|mio\s+peso|il\s+peso)\b',
+            # Altezza
+            r'\b(quanto\s+sono\s+alt[oa]|altezza|mia\s+altezza|alt[oa]\s+sono)\b',
+            # Età
+            r'\b(quanti\s+anni|che\s+età|mia\s+età|anni\s+ho)\b',
+            # Data nascita
+            r'\b(quando\s+(sono\s+)?nat[oa]|data\s+nascita|compleanno)\b',
+            # Email/telefono
+            r'\b(mia\s+email|mio\s+telefono|email|mail|numero)\b',
+            # Allergie
+            r'\b(allergie|allergico)\b',
+            # Profilo generale
+            r'\b(profilo|dati|informazioni\s+personali)\b'
+        ]
+
+        # Se trova un pattern esplicito, è sicuramente data_query
+        for pattern in explicit_data_patterns:
+            if re.search(pattern, corrected_lower) or re.search(pattern, original_lower):
+                if debug:
+                    print(f"✅ DEBUG: Trovato pattern esplicito data_query: {pattern}")
+                    print(f"✅ DEBUG: Classificato come 'data_query' (pattern match)")
+                return 'data_query'
+
+        # Step 4: Determina la categoria migliore con i punteggi
         best_category = max(scores.items(), key=lambda x: x[1])
         best_score = best_category[1]
 
-        # Step 4: Applica logica di decisione intelligente con soglia più bassa
-        if best_score > 0.2:  # Soglia di confidenza ridotta da 0.3 a 0.2
+        # Step 5: Applica logica di decisione intelligente
+        if best_score > 0.2:  # Soglia di confidenza
             result = best_category[0]
         else:
             # Fallback intelligente basato su context clues
             is_question = self._detect_question_intent(user_input)
 
-            # Controllo specifico per data_query patterns
-            corrected_lower = corrected_text.lower()
+            # Controllo più ampio per data_query indicators
             data_indicators = [
                 'data', 'nascita', 'nato', 'nata', 'quando', 'eta', 'anni',
                 'peso', 'altezza', 'allergie', 'profilo', 'dati', 'informazioni',
-                'email', 'telefono', 'contatti'
+                'email', 'telefono', 'contatti', 'quanto', 'sono', 'alt', 'alta', 'alto'
             ]
 
             has_data_indicators = any(indicator in corrected_lower for indicator in data_indicators)
