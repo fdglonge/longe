@@ -526,7 +526,7 @@ class LLMAssistant:
     # ================================
 
     def start_conversation(self):
-        """Avvia la conversazione con registrazione"""
+        """Avvia la conversazione con registrazione - SENZA raccomandazione automatica"""
         if RegistrationHandler:
             self.registration_handler = RegistrationHandler(self.patient, self.patient_db)
             welcome_msg, first_question = self.registration_handler.start_registration()
@@ -539,7 +539,12 @@ class LLMAssistant:
             print("\nAssistente: Benvenuto a Longeviva! Come posso aiutarti oggi?")
             self.conversation_state = "collect_purpose"
 
-        self.conversation_loop()
+        # ✅ MODIFICA: Il conversation_loop ora ritorna solo il successo della registrazione
+        # Non fa più raccomandazioni automatiche
+        success = self.conversation_loop()
+
+        # ✅ Ritorna semplicemente il successo, senza raccomandazioni automatiche
+        return success
 
     def start_logged_in_conversation(self):
         """Avvia la conversazione per un utente già loggato"""
@@ -567,18 +572,165 @@ class LLMAssistant:
             try:
                 user_input = input("\nTu: ").strip()
 
-                if user_input.lower() in ["exit", "quit", "esci"]:
-                    print("\nGrazie per aver usato Longeviva!")
+                # Gestione speciale per input vuoto durante registrazione strutturata
+                if not user_input and self.conversation_state == "structured_registration":
+                    # Se siamo nella fase di summary, l'input vuoto significa "continua"
+                    if (hasattr(self, 'registration_handler') and
+                            hasattr(self.registration_handler, 'current_phase') and
+                            self.registration_handler.current_phase == "show_summary"):
+                        user_input = "continua"  # Simula input di conferma
+                    else:
+                        continue  # Per altre fasi della registrazione, input vuoto non è valido
+                elif not user_input:
+                    # Per tutti gli altri stati, ignora input vuoto
+                    continue
+
+                # Comandi di uscita universali
+                if user_input.lower() in ['esci', 'exit', 'quit']:
+                    print("\n👋 Arrivederci! Grazie per aver usato Longeviva!")
                     break
 
-                self.process_user_input(user_input)
+                # ===== GESTIONE REGISTRAZIONE STRUTTURATA =====
+                if self.conversation_state == "structured_registration":
+                    if hasattr(self, 'registration_handler'):
+                        success, response, next_question = self.registration_handler.process_answer(user_input)
+
+                        print(f"\nAssistente: {response}")
+
+                        if success:
+                            # Registrazione completata - esci dal loop
+                            return True
+
+                        if next_question:
+                            print(f"\n{next_question}")
+
+                        continue
+                    else:
+                        print("❌ Errore: Handler di registrazione non disponibile")
+                        break
+
+                # ===== GESTIONE ALTRI STATI CONVERSAZIONE =====
+
+                # Stato: Raccolta motivo visita
+                elif self.conversation_state == "collect_purpose":
+                    if user_input:
+                        self.patient.set_purpose(user_input)
+                        print(f"\nAssistente: Ho registrato il motivo della tua visita: '{user_input}'")
+
+                        # Prosegui con raccolta dati clinici o raccomandazione medico
+                        print("\nPassiamo alla raccolta dei tuoi dati clinici...")
+                        self.conversation_state = "collect_clinical_data"
+                    else:
+                        print("\nAssistente: Per favore, descrivi il motivo per cui vorresti consultare un medico.")
+                    continue
+
+                # Stato: Raccolta dati clinici
+                elif self.conversation_state == "collect_clinical_data":
+                    # Qui potresti implementare una logica per raccogliere dati clinici
+                    # Se necessario, oppure passare direttamente alla raccomandazione
+                    print("\nAssistente: Grazie per le informazioni cliniche.")
+                    self.conversation_state = "recommend_doctor"
+                    continue
+
+                # Stato: Raccomandazione medico
+                elif self.conversation_state == "recommend_doctor":
+                    self.recommend_doctor()
+                    self.conversation_state = "handle_booking"
+                    continue
+
+                # Stato: Gestione prenotazione
+                elif self.conversation_state == "handle_booking":
+                    if user_input.lower() in ['sì', 'si', 'yes', 'ok', 'prenota']:
+                        if self.recommended_doctor:
+                            print(
+                                f"\n✅ Ottimo! Procedo con la prenotazione per il Dr. {self.recommended_doctor.get_full_name()}")
+                            # Qui implementeresti la logica di prenotazione
+                            print("📅 (Logica di prenotazione da implementare)")
+                        else:
+                            print("\n❌ Non è stato selezionato alcun medico per la prenotazione.")
+                    elif user_input.lower() in ['no', 'non ora', 'dopo']:
+                        print("\n👍 Nessun problema! Puoi prenotare in qualsiasi momento.")
+                    else:
+                        print("\n❓ Non ho capito. Vuoi prenotare un appuntamento? (sì/no)")
+                        continue
+
+                    # Fine conversazione
+                    print("\n👋 Grazie per aver usato Longeviva!")
+                    break
+
+                # Stato: Modalità diario alimentare
+                elif self.conversation_state == "food_diary_mode":
+                    if user_input.lower() in ['menu', 'torna', 'indietro']:
+                        return 'menu'
+                    elif user_input.lower() in ['esci', 'exit', 'quit']:
+                        return 'exit'
+
+                    # Processa input diario alimentare
+                    try:
+                        response = self.handle_food_diary_input(user_input)
+                        print(f"\nLongi: {response}")
+                    except Exception as e:
+                        print(f"\n❌ Errore nel diario alimentare: {e}")
+                    continue
+
+                # Stato: Query sui dati
+                elif self.conversation_state == "data_query":
+                    if user_input.lower() in ['menu', 'torna', 'indietro']:
+                        return 'menu'
+                    elif user_input.lower() in ['esci', 'exit', 'quit']:
+                        return 'exit'
+
+                    # Classifica e gestisci query sui dati
+                    try:
+                        input_type = self.classify_user_input(user_input)
+
+                        if input_type == 'data_query':
+                            self.handle_data_query(user_input)
+                        else:
+                            print("\nTi posso aiutare solo con domande sui tuoi dati personali.")
+                            print("Esempi: 'quanto peso?', 'che età ho?', 'quali sono le mie allergie?'")
+                    except Exception as e:
+                        print(f"\n❌ Errore nella query dati: {e}")
+                    continue
+
+                # Stato: Chat generica
+                elif self.conversation_state == "general_chat":
+                    try:
+                        # Gestione chat generica con LLM
+                        response = self.get_llm_response(user_input)
+                        print(f"\nAssistente: {response}")
+                    except Exception as e:
+                        print(f"\n❌ Errore nella chat: {e}")
+                    continue
+
+                # Stato non riconosciuto
+                else:
+                    print(f"\n❌ Stato conversazione non riconosciuto: {self.conversation_state}")
+                    print("Riavvio in modalità chat generica...")
+                    self.conversation_state = "general_chat"
+                    continue
 
             except KeyboardInterrupt:
-                print("\n\nConversazione terminata.")
-                break
+                print("\n👋 Conversazione interrotta dall'utente")
+                return False
+
+            except EOFError:
+                print("\n👋 Fine input - chiusura conversazione")
+                return False
+
             except Exception as e:
-                print(f"\n❌ Errore: {e}")
-                print("Riprova o digita 'exit' per uscire.")
+                print(f"\n❌ Errore imprevisto nella conversazione: {e}")
+                print("Tentativo di continuare...")
+
+                # Log dell'errore per debug
+                import traceback
+                print(f"Debug traceback: {traceback.format_exc()}")
+
+                # Reset a stato sicuro
+                self.conversation_state = "general_chat"
+                continue
+
+        return True
 
     def process_user_input(self, user_input):
         """Processa l'input dell'utente in base allo stato"""

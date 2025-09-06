@@ -314,10 +314,10 @@ Iniziamo!
             summary = self._create_motivation_summary()
 
             summary_message = f"""
-{summary}
+    {summary}
 
-Ora procediamo con la raccolta dei tuoi dati per completare la registrazione.
-Premi invio per continuare.
+    Ora procediamo con la raccolta dei tuoi dati per completare la registrazione.
+    Premi invio per continuare.
             """
 
             return False, summary_message.strip(), None
@@ -326,24 +326,25 @@ Premi invio per continuare.
 
     def _process_summary_confirmation(self, user_input):
         """Processa la conferma del riassunto e passa alla raccolta dati"""
+        # ✅ Non importa cosa scrive l'utente, procediamo sempre alla raccolta dati
         self.current_phase = "collect_first_data"
 
         first_data_message = """
-Ora ho bisogno delle tue informazioni anagrafiche.
+    Ora ho bisogno delle tue informazioni anagrafiche.
 
-Scrivi un messaggio naturale che includa:
-- Il tuo nome e cognome
-- La tua email (servirà per accedere al sistema)
-- La tua data di nascita (puoi scriverla come "15/03/1990" oppure "15 marzo 1990") oppure la tua età
-- Se sei maschio o femmina
-- La città dove sei nato/a
-- La città dove vivi attualmente
-- La tua altezza (in cm)
-- Il tuo peso (in kg)
+    Scrivi un messaggio naturale che includa:
+    - Il tuo nome e cognome
+    - La tua email (servirà per accedere al sistema)
+    - La tua data di nascita (puoi scriverla come "15/03/1990" oppure "15 marzo 1990") oppure la tua età
+    - Se sei maschio o femmina
+    - La città dove sei nato/a
+    - La città dove vivi attualmente
+    - La tua altezza (in cm)
+    - Il tuo peso (in kg)
 
-Esempio: "Sono Mario Rossi, email mario.rossi@email.com, nato il 15 marzo 1990, sono maschio, nato a Roma dove vivo tuttora. Sono alto 175 cm e peso 70 kg."
+    Esempio: "Sono Mario Rossi, email mario.rossi@email.com, nato il 15 marzo 1990, sono maschio, nato a Roma dove vivo tuttora. Sono alto 175 cm e peso 70 kg."
 
-Puoi scrivere in modo naturale come preferisci!
+    Puoi scrivere in modo naturale come preferisci!
         """
 
         return False, first_data_message.strip(), None
@@ -357,7 +358,7 @@ Puoi scrivere in modo naturale come preferisci!
             if missing_data:
                 self.current_phase = "collect_missing_first_data"
                 self.missing_fields = missing_data
-                self.partial_first_data = extracted_data
+                self.partial_first_data = extracted_data  # ✅ Inizializza qui
 
                 age_info_message = ""
                 if extracted_data.get('age_calculated_from_birthdate'):
@@ -370,45 +371,48 @@ Puoi scrivere in modo naturale come preferisci!
                     age_info_message = f"\n\n💡 Hai {age} anni, ho impostato una data di nascita approssimativa ({birth_date})."
 
                 missing_message = f"""
-Grazie!{age_info_message} Ho capito alcune informazioni, ma mi mancano ancora:
+    Grazie!{age_info_message} Ho capito alcune informazioni, ma mi mancano ancora:
 
-{self._format_missing_data(missing_data)}
+    {self._format_missing_data(missing_data)}
 
-Puoi fornirmele?
+    Puoi fornirmele?
                 """
 
                 return False, missing_message.strip(), None
             else:
+                self.partial_first_data = extracted_data  # ✅ Inizializza anche nel caso di successo
                 return self._complete_first_data_collection()
 
         except Exception as e:
             print(f"❌ Errore nell'estrazione dati: {e}")
             all_fields = ['name', 'surname', 'email', 'birth_date', 'sex', 'birth_city', 'city', 'height', 'weight']
 
+            # ✅ FIX PRINCIPALE: Inizializza partial_first_data nel blocco except
+            self.partial_first_data = {}
+
             missing_message = f"""
-Mi scuso, ho avuto difficoltà a processare le informazioni. 
+    Mi scuso, ho avuto difficoltà a processare le informazioni. 
 
-Mi servono questi dati:
+    Mi servono questi dati:
 
-{self._format_missing_data(all_fields)}
+    {self._format_missing_data(all_fields)}
 
-Puoi fornirmeli?
+    Puoi fornirmeli?
             """
 
             self.current_phase = "collect_missing_first_data"
             self.missing_fields = all_fields
-            self.partial_first_data = {}
 
             return False, missing_message.strip(), None
 
     def _extract_first_data(self, text):
-        """Estrae i dati anagrafici dal primo messaggio"""
+        """Estrae i dati anagrafici dal primo messaggio - VERSIONE CORRETTA DEFINITIVA"""
         extracted = {}
         text_lower = text.lower()
 
         print(f"🔍 DEBUG: Estrazione primo messaggio: '{text}'")
 
-        # Estrazione email - PRIORITÀ ALTA
+        # Estrazione email
         email_patterns = [
             r'email\s*[:\-]?\s*([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})',
             r'mail\s*[:\-]?\s*([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})',
@@ -426,14 +430,10 @@ Puoi fornirmeli?
         date_patterns = [
             r'nato\s+(?:il\s+)?(\d{1,2}\s+[a-zA-Z]+\s+\d{4})',
             r'nata\s+(?:il\s+)?(\d{1,2}\s+[a-zA-Z]+\s+\d{4})',
-            r'nascita.*?(\d{1,2}\s+[a-zA-Z]+\s+\d{4})',
             r'nato\s+(?:il\s+)?(\d{1,2}/\d{1,2}/\d{4})',
             r'nata\s+(?:il\s+)?(\d{1,2}/\d{1,2}/\d{4})',
-            r'nascita.*?(\d{1,2}/\d{1,2}/\d{4})',
             r'\b(\d{1,2}\s+[a-zA-Z]+\s+\d{4})\b',
-            r'\b(\d{1,2}/\d{1,2}/\d{4})\b',
-            r'(\d{1,2}-\d{1,2}-\d{4})',
-            r'(\d{1,2}\.\d{1,2}\.\d{4})'
+            r'\b(\d{1,2}/\d{1,2}/\d{4})\b'
         ]
 
         for pattern in date_patterns:
@@ -451,36 +451,30 @@ Puoi fornirmeli?
                         print(f"🔍 DEBUG: Età calcolata: {calculated_age} anni")
                     break
 
-        # Se non abbiamo trovato una data, cerca l'età
+        # Estrazione età se non trovata data
         if 'birth_date' not in extracted:
             age_patterns = [
                 r'ho (\d+) anni',
                 r'(\d+) anni',
-                r'età (\d+)',
-                r'sono (\w+) di (\d+) anni'
+                r'età (\d+)'
             ]
-
             for pattern in age_patterns:
                 match = re.search(pattern, text_lower)
                 if match:
-                    groups = match.groups()
-                    for group in groups:
-                        if group and group.isdigit():
-                            age = int(group)
-                            if 0 < age < 120:
-                                extracted['age'] = age
-                                birth_date_approx = calculate_birth_date_from_age(age)
-                                if birth_date_approx:
-                                    extracted['birth_date'] = birth_date_approx
-                                    extracted['birth_date_calculated_from_age'] = True
-                                    print(f"🔍 DEBUG: Età estratta: {age}, data approssimativa: {birth_date_approx}")
-                                break
-                    if 'age' in extracted:
+                    age = int(match.group(1))
+                    if 0 < age < 120:
+                        extracted['age'] = age
+                        birth_date_approx = calculate_birth_date_from_age(age)
+                        if birth_date_approx:
+                            extracted['birth_date'] = birth_date_approx
+                            extracted['birth_date_calculated_from_age'] = True
+                            print(f"🔍 DEBUG: Età estratta: {age}")
                         break
 
-        # Estrazione nome e cognome
+        # ESTRAZIONE NOME E COGNOME - VERSIONE SICURA
         excluded_words = ['nato', 'nata', 'sono', 'del', 'della', 'di', 'da', 'il', 'la', 'un', 'una', 'che', 'dove',
-                          'come', 'chiamo', 'alto', 'alta', 'peso', 'vivo', 'abito', 'email', 'mail', 'cm', 'kg']
+                          'come', 'chiamo', 'alto', 'alta', 'peso', 'vivo', 'abito', 'email', 'mail', 'cm', 'kg',
+                          'uomo', 'donna', 'maschio', 'femmina', 'e', 'ed']
 
         def is_valid_name_part(word):
             if not word or len(word) < 2:
@@ -489,67 +483,66 @@ Puoi fornirmeli?
                 return False
             if any(char.isdigit() for char in word):
                 return False
-            if '@' in word:  # Evita email
+            if '@' in word:
                 return False
-            if not word.replace(' ', '').isalpha():
+            if not word.replace("'", "").isalpha():
                 return False
             return True
 
-        # Pattern per "mi chiamo Nome Cognome"
-        mi_chiamo_pattern = r'mi chiamo ([A-Za-zÀ-ÿ]+)\s+([A-Za-zÀ-ÿ]+(?:\s+[A-Za-zÀ-ÿ]+)*?)(?:\s*[,.]|\s*$)'
-        match = re.search(mi_chiamo_pattern, text, re.IGNORECASE)
-        if match:
-            name_candidate = match.group(1).strip()
-            surname_candidate = match.group(2).strip()
+        # Pattern sicuri per nome e cognome
+        name_patterns = [
+            r'(?:mi chiamo|sono)\s+([A-Za-zÀ-ÿ\']+)\s+([A-Za-zÀ-ÿ\']+)(?:\s*[,.]|\s+e\s|\s+nato|\s+nata|\s+email)',
+            r'il mio nome è\s+([A-Za-zÀ-ÿ\']+)(?:\s+([A-Za-zÀ-ÿ\']+))?'
+        ]
 
-            if is_valid_name_part(name_candidate):
-                extracted['name'] = name_candidate.title()
-                if is_valid_name_part(surname_candidate):
-                    extracted['surname'] = surname_candidate.title()
-                    print(f"🔍 DEBUG: Nome e cognome estratti: {extracted['name']} {extracted['surname']}")
+        for pattern in name_patterns:
+            match = re.search(pattern, text, re.IGNORECASE)
+            if match:
+                name_candidate = match.group(1).strip()
+                surname_candidate = match.group(2).strip() if len(match.groups()) > 1 and match.group(2) else None
 
-        # Pattern per "sono Nome"
-        elif re.search(r'\bsono\s+([A-Za-zÀ-ÿ]+)(?:\s+e\s|\s+nato|\s+nata|\s*,)', text, re.IGNORECASE):
-            match = re.search(r'\bsono\s+([A-Za-zÀ-ÿ]+)(?:\s+e\s|\s+nato|\s+nata|\s*,)', text, re.IGNORECASE)
-            name_candidate = match.group(1).strip()
-            if is_valid_name_part(name_candidate):
-                extracted['name'] = name_candidate.title()
-                print(f"🔍 DEBUG: Nome estratto: {extracted['name']}")
+                print(f"🔍 DEBUG: Pattern matched - Nome: '{name_candidate}', Cognome: '{surname_candidate}'")
 
-        # Estrazione sesso
+                if is_valid_name_part(name_candidate):
+                    extracted['name'] = name_candidate.title()
+                    print(f"🔍 DEBUG: Nome estratto: {extracted['name']}")
+
+                    if surname_candidate and is_valid_name_part(surname_candidate):
+                        extracted['surname'] = surname_candidate.title()
+                        print(f"🔍 DEBUG: Cognome estratto: {extracted['surname']}")
+                    break
+
+        # ESTRAZIONE SESSO - PRIORITARIA
         sex_patterns = [
-            r'sono (?:un\s+)?(maschio|uomo|ragazzo|m)\b',
-            r'sono (?:una\s+)?(femmina|donna|ragazza|f)\b',
-            r'sesso.*?(M|F|maschio|femmina|uomo|donna)',
-            r'\b(maschio|femmina|uomo|donna|m|f)\b'
+            r'sono\s+(?:un\s+)?(uomo|maschio)',
+            r'sono\s+(?:una\s+)?(donna|femmina)',
+            r'\b(uomo|donna|maschio|femmina)\b'
         ]
 
         for pattern in sex_patterns:
             match = re.search(pattern, text_lower)
             if match:
                 value = match.group(1).lower()
-                if value in ['maschio', 'uomo', 'ragazzo', 'm']:
+                if value in ['uomo', 'maschio']:
                     extracted['sex'] = 'M'
                     print(f"🔍 DEBUG: Sesso estratto: M")
                     break
-                elif value in ['femmina', 'donna', 'ragazza', 'f']:
+                elif value in ['donna', 'femmina']:
                     extracted['sex'] = 'F'
                     print(f"🔍 DEBUG: Sesso estratto: F")
                     break
 
-        # Estrazione città
+        # ESTRAZIONE CITTÀ - MIGLIORATA
         italian_cities = [
             'roma', 'milano', 'napoli', 'torino', 'palermo', 'genova',
             'bologna', 'firenze', 'bari', 'catania', 'venezia', 'verona',
-            'messina', 'padova', 'trieste', 'brescia', 'parma', 'modena',
-            'reggio', 'perugia', 'livorno', 'cagliari', 'foggia', 'rimini',
-            'salerno', 'ferrara', 'pescara', 'monza', 'forlì', 'ravenna'
+            'messina', 'padova', 'trieste', 'brescia', 'parma', 'modena'
         ]
 
         # Pattern per città di nascita
         birth_city_patterns = [
-            r'nato\s+(?:a|ad|in)\s+([A-Za-zÀ-ÿ]+)(?:\s|$|,|\.|e)',
-            r'nata\s+(?:a|ad|in)\s+([A-Za-zÀ-ÿ]+)(?:\s|$|,|\.|e)',
+            r'nato\s+(?:a|ad|in)\s+([A-Za-zÀ-ÿ]+)',
+            r'nata\s+(?:a|ad|in)\s+([A-Za-zÀ-ÿ]+)',
             r'originario\s+(?:di|da)\s+([A-Za-zÀ-ÿ]+)',
             r'originaria\s+(?:di|da)\s+([A-Za-zÀ-ÿ]+)'
         ]
@@ -564,13 +557,13 @@ Puoi fornirmeli?
                     break
 
         # Pattern per città di residenza
-        residence_city_patterns = [
-            r'vivo\s+(?:a|ad|in|ancora\s+a|tuttora\s+a)\s+([A-Za-zÀ-ÿ]+)(?:\s|$|,|\.|e)',
-            r'abito\s+(?:a|ad|in)\s+([A-Za-zÀ-ÿ]+)(?:\s|$|,|\.|e)',
-            r'risiedo\s+(?:a|ad|in)\s+([A-Za-zÀ-ÿ]+)(?:\s|$|,|\.|e)'
+        residence_patterns = [
+            r'vivo\s+(?:a|ad|in|ancora\s+a|tuttora\s+a)\s+([A-Za-zÀ-ÿ]+)',
+            r'abito\s+(?:a|ad|in)\s+([A-Za-zÀ-ÿ]+)',
+            r'risiedo\s+(?:a|ad|in)\s+([A-Za-zÀ-ÿ]+)'
         ]
 
-        for pattern in residence_city_patterns:
+        for pattern in residence_patterns:
             match = re.search(pattern, text_lower)
             if match:
                 city_name = match.group(1).strip().lower()
@@ -579,31 +572,17 @@ Puoi fornirmeli?
                     print(f"🔍 DEBUG: Città di residenza: {extracted['city']}")
                     break
 
-        # Gestione "nato e vivo a..."
-        if 'nato e vivo' in text_lower or 'nata e vivo' in text_lower:
-            combined_patterns = [
-                r'(?:nato|nata)\s+e\s+vivo\s+(?:a|ad|in)\s+([A-Za-zÀ-ÿ]+)',
-                r'(?:nato|nata)\s+e\s+(?:vivo|abito)\s+(?:a|ad|in)\s+([A-Za-zÀ-ÿ]+)'
-            ]
+        # Gestione "dove vivo tuttora" = stessa città
+        if 'tuttora' in text_lower and 'birth_city' in extracted and 'city' not in extracted:
+            extracted['city'] = extracted['birth_city']
+            print(f"🔍 DEBUG: Stessa città (tuttora): {extracted['city']}")
 
-            for pattern in combined_patterns:
-                match = re.search(pattern, text_lower)
-                if match:
-                    city_name = match.group(1).strip().lower()
-                    if city_name in italian_cities:
-                        extracted['birth_city'] = city_name.title()
-                        extracted['city'] = city_name.title()
-                        print(f"🔍 DEBUG: Stessa città: {extracted['city']}")
-                        break
-
-        # Estrazione altezza e peso
+        # ESTRAZIONE ALTEZZA E PESO
         height_patterns = [
             r'alto\s+(\d+)\s*cm',
             r'alta\s+(\d+)\s*cm',
-            r'altezza\s+(?:di\s+)?(\d+)',
-            r'(\d+)\s*cm(?:\s+e\s+peso|\s*\.|\s*$|,)',
-            r'sono\s+alto\s+(\d+)',
-            r'sono\s+alta\s+(\d+)'
+            r'altezza\s+(\d+)',
+            r'(\d+)\s*cm(?:\s+e\s+peso)'
         ]
 
         for pattern in height_patterns:
@@ -612,14 +591,13 @@ Puoi fornirmeli?
                 height = int(match.group(1))
                 if 120 <= height <= 250:
                     extracted['height'] = str(height)
-                    print(f"🔍 DEBUG: Altezza estratta: {height} cm")
+                    print(f"🔍 DEBUG: Altezza: {height} cm")
                     break
 
         weight_patterns = [
             r'peso\s+(\d+)\s*kg',
-            r'(\d+)\s*kg(?:\s*$|\s*\.|,)',
-            r'peso.*?(\d+)(?:\s*kg)?',
-            r'pesa\s+(\d+)'
+            r'(\d+)\s*kg(?:\s*$|\s*\.)',
+            r'peso\s+(\d+)'
         ]
 
         for pattern in weight_patterns:
@@ -628,7 +606,7 @@ Puoi fornirmeli?
                 weight = int(match.group(1))
                 if 30 <= weight <= 300:
                     extracted['weight'] = str(weight)
-                    print(f"🔍 DEBUG: Peso estratto: {weight} kg")
+                    print(f"🔍 DEBUG: Peso: {weight} kg")
                     break
 
         print(f"🔍 DEBUG: Dati estratti finali: {extracted}")
@@ -734,14 +712,45 @@ Mi mancano ancora questi dati:
         if len(self.missing_fields) == 1:
             field = self.missing_fields[0]
 
+            if field == 'name':
+                # Pattern per nome singolo
+                name_patterns = [
+                    r'^([A-Za-zÀ-ÿ\']+)$',  # Solo il nome
+                    r'(?:nome|chiamo)\s+(?:è\s+)?([A-Za-zÀ-ÿ\']+)',
+                    r'sono\s+([A-Za-zÀ-ÿ\']+)',
+                    r'mi chiamo\s+([A-Za-zÀ-ÿ\']+)'
+                ]
+
+                for pattern in name_patterns:
+                    match = re.search(pattern, user_input_clean, re.IGNORECASE)
+                    if match:
+                        name_candidate = match.group(1).strip()
+                        if len(name_candidate) > 1 and name_candidate.isalpha():
+                            extracted['name'] = name_candidate.title()
+                            print(f"🔍 DEBUG: Nome estratto singolo: {extracted['name']}")
+                            break
+
             if field == 'email':
                 email_match = re.search(r'([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})', user_input_clean)
                 if email_match:
                     extracted['email'] = email_match.group(1).lower()
 
             elif field == 'surname':
-                if len(user_input_clean.split()) <= 2 and user_input_clean.isalpha():
-                    extracted['surname'] = user_input_clean.title()
+                # Pattern per cognome singolo
+                surname_patterns = [
+                    r'^([A-Za-zÀ-ÿ\']+(?:\s+[A-Za-zÀ-ÿ\']+)*)$',  # Solo il cognome
+                    r'cognome\s+(?:è\s+)?([A-Za-zÀ-ÿ\']+(?:\s+[A-Za-zÀ-ÿ\']+)*)',
+                    r'di cognome\s+([A-Za-zÀ-ÿ\']+(?:\s+[A-Za-zÀ-ÿ\']+)*)'
+                ]
+
+                for pattern in surname_patterns:
+                    match = re.search(pattern, user_input_clean, re.IGNORECASE)
+                    if match:
+                        surname_candidate = match.group(1).strip()
+                        if len(surname_candidate) > 1 and surname_candidate.replace(' ', '').isalpha():
+                            extracted['surname'] = surname_candidate.title()
+                            print(f"🔍 DEBUG: Cognome estratto singolo: {extracted['surname']}")
+                            break
 
             elif field == 'birth_date_or_age':
                 parsed_date = parse_date_italian(user_input_clean)
@@ -1328,7 +1337,7 @@ Scrivi i dati mancanti separati da virgole:
 
     def _complete_registration(self):
         """
-        Completa la registrazione con il nuovo sistema di sicurezza
+        Completa la registrazione con il nuovo sistema di sicurezza - SENZA raccomandazione automatica medico
         """
         try:
             # Controlla duplicati prima di procedere
@@ -1355,19 +1364,19 @@ Scrivi i dati mancanti separati da virgole:
                 self.patient_document_id = patient_id
                 self.generated_password = generated_password
 
+                # ✅ MODIFICA: Rimuovi il messaggio sulla ricerca del medico
                 success_message = f"""
-✅ Registrazione completata con successo!
+    ✅ Registrazione completata con successo!
 
-🔐 **CREDENZIALI DI ACCESSO IMPORTANTI:**
-📧 Email: {self.patient.get_email()}
-🔑 Password: {generated_password}
+    🔐 **CREDENZIALI DI ACCESSO IMPORTANTI:**
+    📧 Email: {self.patient.get_email()}
+    🔑 Password: {generated_password}
 
-⚠️  **IMPORTANTE**: Salva queste credenziali in un posto sicuro!
-La password è stata generata automaticamente e ti servirà per accedere al sistema.
+    ⚠️  **IMPORTANTE**: Salva queste credenziali in un posto sicuro!
+    La password è stata generata automaticamente e ti servirà per accedere al sistema.
 
-Il tuo profilo è stato salvato e ora procederò con la ricerca del medico più adatto alle tue esigenze utilizzando l'intelligenza artificiale.
-
-Un momento mentre analizzo le tue preferenze...
+    Il tuo profilo è stato salvato correttamente nel sistema.
+    Ora puoi utilizzare tutte le funzionalità di Longeviva!
                 """
 
                 return True, success_message.strip(), None

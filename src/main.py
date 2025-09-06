@@ -19,12 +19,12 @@ def show_welcome_menu():
 
 
 def show_post_login_menu():
-    """Mostra il menu post-login"""
+    """Mostra il menu post-login/post-registrazione"""
     print("\n🎯 Cosa vorresti fare oggi?")
     print("=" * 50)
     print("1️⃣  - Recupera i tuoi dati personali")
     print("2️⃣  - Avvia chat con Longi per diario alimentare")
-    print("3️⃣  - Cambia password")
+    print("3️⃣  - Prenota un meeting con uno specialista")
     print("4️⃣  - Esci")
     print("=" * 50)
 
@@ -124,6 +124,14 @@ def handle_registration():
             # Mostra le credenziali generate
             show_registration_completion(assistant.registration_handler)
 
+            # ✅ MODIFICA PRINCIPALE: Rimuovi la raccomandazione automatica del medico
+            # Dopo registrazione, vai direttamente al menu post-login
+            print("\n🎉 Registrazione completata! Benvenuto in Longeviva!")
+            print("Ora puoi utilizzare tutte le funzionalità del sistema.")
+
+            # Avvia direttamente la sessione utente con il menu
+            start_user_session(assistant)
+
     except ImportError as e:
         print(f"❌ Errore caricamento moduli: {e}")
         print("💡 Assicurati che tutti i moduli siano presenti")
@@ -196,8 +204,35 @@ def handle_login():
         # Se arriviamo qui, il login è andato a buon fine
         print("✅ Login effettuato con successo!")
 
-        # Avvia la sessione post-login
-        start_post_login_session(login_handler)
+        # Carica assistente e avvia sessione
+        from LLM.llm_assistant import LLMAssistant
+        assistant = LLMAssistant()
+
+        # Passa i dati del paziente all'assistente
+        patient_data = login_handler.get_data()
+        if patient_data:
+            success = assistant.set_patient_from_data(patient_data)
+            if success:
+                print("📋 Dati del tuo profilo caricati correttamente.")
+            else:
+                print("⚠️ Errore nel caricamento del profilo, procedo comunque.")
+
+        # Controlla ricerca semantica
+        try:
+            from utils.semantic_search import enhance_doctor_recommendation
+            if enhance_doctor_recommendation(assistant):
+                print("🧠 Ricerca semantica attivata")
+        except ImportError:
+            print("⚠️ Ricerca semantica non disponibile")
+
+        print("🚀 Sistema pronto!\n")
+
+        # Mostra benvenuto personalizzato
+        name = assistant.patient.get_name() if assistant.patient else "utente"
+        print(f"🎉 Bentornato, {name}!")
+
+        # Avvia sessione utente
+        start_user_session(assistant)
 
     except ImportError as e:
         print(f"❌ Errore caricamento LoginInHandler: {e}")
@@ -282,118 +317,142 @@ def handle_food_diary_chat(assistant):
         return None
 
 
-def handle_password_change(login_handler):
-    """
-    Gestisce il cambio password
-    """
-    print("\n🔑 CAMBIO PASSWORD")
+def handle_specialist_booking(assistant):
+    """Gestisce la prenotazione di un meeting con uno specialista"""
+    print("\n👨‍⚕️ PRENOTAZIONE MEETING CON SPECIALISTA")
     print("=" * 50)
 
-    try:
-        # Chiedi la nuova password
+    if not assistant.patient:
+        print("❌ Nessun dato paziente disponibile")
+        return
+
+    name = assistant.patient.get_name()
+    print(f"Ciao {name}! Ti aiuterò a prenotare un meeting con lo specialista più adatto.")
+    print("\nPer trovare il medico perfetto per te, dimmi:")
+    print("Qual è il motivo per cui desideri consultare uno specialista?")
+    print("Descrivi pure il problema, i sintomi o la visita che ti serve.")
+    print("\nScrivi 'menu' per tornare al menu principale.")
+
+    while True:
         try:
-            import getpass
-            new_password = getpass.getpass("🔑 Inserisci la nuova password: ")
-            confirm_password = getpass.getpass("🔑 Conferma la nuova password: ")
-        except ImportError:
-            new_password = input("🔑 Inserisci la nuova password: ")
-            confirm_password = input("🔑 Conferma la nuova password: ")
+            user_input = input("\nTu: ").strip()
 
-        if not new_password:
-            print("❌ La password non può essere vuota.")
-            return
-
-        if new_password != confirm_password:
-            print("❌ Le password non coincidono.")
-            return
-
-        if len(new_password) < 8:
-            print("❌ La password deve essere lunga almeno 8 caratteri.")
-            return
-
-        # Cambia la password
-        if login_handler.change_password(new_password):
-            print("✅ Password cambiata con successo!")
-        else:
-            print("❌ Errore nel cambio password.")
-
-    except KeyboardInterrupt:
-        print("\n👋 Operazione annullata.")
-    except Exception as e:
-        print(f"❌ Errore: {e}")
-
-
-def start_post_login_session(login_handler):
-    """Avvia la sessione dopo il login completato"""
-    print("\n🎯 Sessione avviata!")
-    print("I tuoi dati sono già disponibili nel sistema.\n")
-
-    try:
-        # Carica l'assistente LLM
-        from LLM.llm_assistant import LLMAssistant
-
-        # Inizializza l'assistente
-        assistant = LLMAssistant()
-
-        # Passa i dati del paziente all'assistente
-        patient_data = login_handler.get_data()
-        if patient_data:
-            success = assistant.set_patient_from_data(patient_data)
-            if success:
-                print("📋 Dati del tuo profilo caricati correttamente.")
-            else:
-                print("⚠️ Errore nel caricamento del profilo, procedo comunque.")
-
-        # Controlla ricerca semantica
-        try:
-            from utils.semantic_search import enhance_doctor_recommendation
-            if enhance_doctor_recommendation(assistant):
-                print("🧠 Ricerca semantica attivata")
-        except ImportError:
-            print("⚠️ Ricerca semantica non disponibile")
-
-        print("🚀 Sistema pronto!\n")
-
-        # Mostra benvenuto personalizzato
-        name = assistant.patient.get_name() if assistant.patient else "utente"
-        print(f"🎉 Bentornato, {name}!")
-
-        # Menu post-login
-        while True:
-            show_post_login_menu()
-            choice = get_post_login_choice()
-
-            if choice == 1:
-                # Recupera dati personali
-                result = handle_data_retrieval(assistant)
-                if result == 'exit':
-                    break
-                input("\nPremi INVIO per continuare...")
-
-            elif choice == 2:
-                # Chat diario alimentare
-                result = handle_food_diary_chat(assistant)
-                if result == 'exit':
-                    break
-                input("\nPremi INVIO per continuare...")
-
-            elif choice == 3:
-                # Cambio password
-                handle_password_change(login_handler)
-                input("\nPremi INVIO per continuare...")
-
-            elif choice == 4:
-                # Esci
-                print("\n👋 Grazie per aver usato Longeviva!")
-                print("Ci vediamo presto per continuare il tuo percorso di benessere!")
+            if user_input.lower() in ['menu', 'torna', 'indietro']:
                 break
+            elif user_input.lower() in ['esci', 'exit', 'quit']:
+                return 'exit'
+            elif not user_input:
+                print("Per favore, descrivi il motivo della visita.")
+                continue
 
-    except ImportError as e:
-        print(f"❌ Errore caricamento assistente: {e}")
-    except Exception as e:
-        print(f"❌ Errore nella sessione: {e}")
-        import traceback
-        traceback.print_exc()
+            # Salva il motivo della visita
+            assistant.patient.set_purpose(user_input)
+
+            print(f"\nPerfetto! Ho registrato la tua richiesta: '{user_input}'")
+            print("🔍 Sto analizzando il tuo caso per trovare lo specialista più adatto...")
+            print("📍 Considerando la tua posizione e le tue esigenze...")
+
+            # Usa il sistema di raccomandazione esistente dell'assistente
+            assistant.recommend_doctor()
+
+            if assistant.recommended_doctor:
+                print("\n📅 Vuoi procedere con la prenotazione di un appuntamento?")
+
+                booking_choice = input("Rispondi 'sì' per prenotare o 'no' per tornare al menu: ").strip().lower()
+
+                if booking_choice in ['sì', 'si', 'yes', 'ok', 'prenota']:
+                    # Avvia il processo di booking usando il sistema esistente
+                    print("\n🗓️ PRENOTAZIONE APPUNTAMENTO")
+                    print("=" * 40)
+
+                    # Simula la disponibilità e propone slot
+                    doctor = assistant.recommended_doctor
+                    print(f"📋 Medico: Dr. {doctor.get_full_name()}")
+                    print(f"🏥 Specializzazione: {doctor.get_specialization()}")
+
+                    # Propone slot disponibili (per ora simulati)
+                    print("\n📅 Slot disponibili:")
+                    print("1. Lunedì 15 gennaio, ore 10:00")
+                    print("2. Mercoledì 17 gennaio, ore 15:30")
+                    print("3. Venerdì 19 gennaio, ore 09:15")
+
+                    slot_choice = input("\nScegli uno slot (1/2/3) o 'annulla': ").strip()
+
+                    if slot_choice in ['1', '2', '3']:
+                        slots = [
+                            "Lunedì 15 gennaio, ore 10:00",
+                            "Mercoledì 17 gennaio, ore 15:30",
+                            "Venerdì 19 gennaio, ore 09:15"
+                        ]
+                        selected_slot = slots[int(slot_choice) - 1]
+
+                        # Simula prenotazione completata
+                        booking_id = f"BOOK-{hash(f'{name}{selected_slot}') % 100000:05d}"
+
+                        print(f"\n✅ PRENOTAZIONE CONFERMATA!")
+                        print("=" * 40)
+                        print(f"📋 Paziente: {name}")
+                        print(f"👨‍⚕️ Medico: Dr. {doctor.get_full_name()}")
+                        print(f"📅 Data e ora: {selected_slot}")
+                        print(f"🆔 Codice prenotazione: {booking_id}")
+                        print(f"📍 Indirizzo: {doctor.get_address()}")
+                        print(f"📞 Telefono: {doctor.get_phone_number() or '06-12345678'}")
+                        print("\n📧 Riceverai una conferma via email.")
+                        print("📱 Ti invieremo un promemoria 24h prima dell'appuntamento.")
+
+                        break
+                    elif slot_choice.lower() == 'annulla':
+                        print("Prenotazione annullata.")
+                        break
+                    else:
+                        print("Scelta non valida.")
+                else:
+                    print("Prenotazione annullata. Puoi sempre tornare quando vuoi!")
+                    break
+            else:
+                print("❌ Non sono riuscito a trovare uno specialista adatto.")
+                print("Riprova con una descrizione diversa del problema.")
+
+        except KeyboardInterrupt:
+            break
+        except Exception as e:
+            print(f"❌ Errore: {e}")
+
+
+def start_user_session(assistant):
+    """Avvia la sessione utente unificata per login e registrazione"""
+
+    # Menu principale unificato
+    while True:
+        show_post_login_menu()
+        choice = get_post_login_choice()
+
+        if choice == 1:
+            # Recupera dati personali
+            result = handle_data_retrieval(assistant)
+            if result == 'exit':
+                break
+            input("\nPremi INVIO per continuare...")
+
+        elif choice == 2:
+            # Chat diario alimentare
+            result = handle_food_diary_chat(assistant)
+            if result == 'exit':
+                break
+            input("\nPremi INVIO per continuare...")
+
+        elif choice == 3:
+            # Prenota meeting con specialista
+            result = handle_specialist_booking(assistant)
+            if result == 'exit':
+                break
+            input("\nPremi INVIO per continuare...")
+
+        elif choice == 4:
+            # Esci
+            print("\n👋 Grazie per aver usato Longeviva!")
+            print("Ci vediamo presto per continuare il tuo percorso di benessere!")
+            break
 
 
 def main():
@@ -407,7 +466,7 @@ def main():
                 # Registrazione
                 success = handle_registration()
                 if success:
-                    print("\n✅ Registrazione completata!")
+                    print("\n✅ Sessione completata!")
                     break
                 else:
                     print("\n❌ Registrazione fallita. Riprova.")
