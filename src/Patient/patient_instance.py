@@ -134,9 +134,37 @@ class Patient:
             self.allergies = allergies or []
 
     def get_allergies(self):
+        """Restituisce le allergie come stringa"""
         if not self.allergies:
             return "Nessuna"
-        return ", ".join(self.allergies)
+
+        # Handle different data formats
+        allergy_strings = []
+        for allergy in self.allergies:
+            if isinstance(allergy, str):
+                # Already a string
+                allergy_strings.append(allergy)
+            elif isinstance(allergy, dict):
+                # Extract allergy name from dict structure
+                # Common Firebase structures: {'name': 'allergy_name'} or {'allergy': 'name'}
+                if 'name' in allergy:
+                    allergy_strings.append(str(allergy['name']))
+                elif 'allergy' in allergy:
+                    allergy_strings.append(str(allergy['allergy']))
+                elif 'allergen' in allergy:
+                    allergy_strings.append(str(allergy['allergen']))
+                else:
+                    # Fallback: convert entire dict to string or take first value
+                    values = [v for v in allergy.values() if isinstance(v, str)]
+                    if values:
+                        allergy_strings.append(values[0])
+                    else:
+                        allergy_strings.append(str(allergy))
+            else:
+                # Convert other types to string
+                allergy_strings.append(str(allergy))
+
+        return ", ".join(allergy_strings) if allergy_strings else "Nessuna"
 
     def set_contact_info(self, email=None, phone=None):
         if email:
@@ -299,3 +327,43 @@ class Patient:
 
     def set_diet_type(self, diet_type):
         self.set_lifestyle_field('typeOfDiet', diet_type)
+
+    def get_full_name(self):
+        """Restituisce il nome completo del paziente"""
+        if self.name and self.surname:
+            return f"{self.name} {self.surname}"
+        elif self.name:
+            return self.name
+        elif self.surname:
+            return self.surname
+        else:
+            return "Nome non disponibile"
+
+    def get_years_of_experience(self):
+        """Metodo per compatibilità - non applicabile ai pazienti"""
+        return 0
+
+    def get_specialization(self):
+        """Metodo per compatibilità - non applicabile ai pazienti"""
+        return "Paziente"
+
+    def get_address(self):
+        """Restituisce l'indirizzo se disponibile"""
+        if hasattr(self, 'address') and self.address:
+            return self.address
+        elif self.city:
+            return self.city
+        else:
+            return "Indirizzo non disponibile"
+
+    def get_phone_number(self):
+        """Alias per get_phone()"""
+        return self.get_phone()
+
+    def __str__(self):
+        """Rappresentazione stringa del paziente"""
+        return f"Paziente: {self.get_full_name()}"
+
+    def __repr__(self):
+        """Rappresentazione per debug"""
+        return f"Patient(name='{self.name}', surname='{self.surname}', email='{self.email}')"
