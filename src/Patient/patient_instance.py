@@ -134,9 +134,37 @@ class Patient:
             self.allergies = allergies or []
 
     def get_allergies(self):
+        """Restituisce le allergie come stringa"""
         if not self.allergies:
             return "Nessuna"
-        return ", ".join(self.allergies)
+
+        # Handle different data formats
+        allergy_strings = []
+        for allergy in self.allergies:
+            if isinstance(allergy, str):
+                # Already a string
+                allergy_strings.append(allergy)
+            elif isinstance(allergy, dict):
+                # Extract allergy name from dict structure
+                # Common Firebase structures: {'name': 'allergy_name'} or {'allergy': 'name'}
+                if 'name' in allergy:
+                    allergy_strings.append(str(allergy['name']))
+                elif 'allergy' in allergy:
+                    allergy_strings.append(str(allergy['allergy']))
+                elif 'allergen' in allergy:
+                    allergy_strings.append(str(allergy['allergen']))
+                else:
+                    # Fallback: convert entire dict to string or take first value
+                    values = [v for v in allergy.values() if isinstance(v, str)]
+                    if values:
+                        allergy_strings.append(values[0])
+                    else:
+                        allergy_strings.append(str(allergy))
+            else:
+                # Convert other types to string
+                allergy_strings.append(str(allergy))
+
+        return ", ".join(allergy_strings) if allergy_strings else "Nessuna"
 
     def set_contact_info(self, email=None, phone=None):
         if email:

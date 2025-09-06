@@ -13,18 +13,19 @@ def show_welcome_menu():
     print("=" * 50)
     print("Scegli un'opzione:")
     print("0️⃣  - Nuova registrazione")
-    print("1️⃣  - Accesso (Login)")
+    print("1️⃣  - Accesso con email e password")
     print("2️⃣  - Esci")
     print("=" * 50)
 
 
 def show_post_login_menu():
-    """Mostra il menu post-login con le nuove opzioni"""
+    """Mostra il menu post-login"""
     print("\n🎯 Cosa vorresti fare oggi?")
     print("=" * 50)
     print("1️⃣  - Recupera i tuoi dati personali")
     print("2️⃣  - Avvia chat con Longi per diario alimentare")
-    print("3️⃣  - Esci")
+    print("3️⃣  - Cambia password")
+    print("4️⃣  - Esci")
     print("=" * 50)
 
 
@@ -48,16 +49,48 @@ def get_post_login_choice():
     """Ottiene la scelta dell'utente nel menu post-login"""
     while True:
         try:
-            choice = input("Inserisci la tua scelta (1/2/3): ").strip()
-            if choice in ['1', '2', '3']:
+            choice = input("Inserisci la tua scelta (1/2/3/4): ").strip()
+            if choice in ['1', '2', '3', '4']:
                 return int(choice)
             else:
-                print("❌ Scelta non valida. Inserisci 1, 2 o 3.")
+                print("❌ Scelta non valida. Inserisci 1, 2, 3 o 4.")
         except KeyboardInterrupt:
             print("\n👋 Arrivederci!")
-            return 3
+            return 4
         except Exception:
             print("❌ Input non valido. Riprova.")
+
+
+def show_registration_completion(registration_handler):
+    """
+    Mostra il completamento della registrazione con le credenziali generate
+    """
+    if not registration_handler:
+        return
+
+    email, password, doc_id = registration_handler.get_generated_credentials()
+
+    if email and password:
+        print("\n" + "=" * 60)
+        print("🎉 REGISTRAZIONE COMPLETATA CON SUCCESSO!")
+        print("=" * 60)
+        print(f"📧 Email: {email}")
+        print(f"🔑 Password: {password}")
+        print("=" * 60)
+        print("⚠️  IMPORTANTE: Salva queste credenziali!")
+        print("    Ti serviranno per accedere al sistema.")
+        print("=" * 60)
+
+        # Chiedi se vuole salvare le credenziali
+        try:
+            save_choice = input("\nVuoi che ti mostri di nuovo le credenziali? (s/n): ").strip().lower()
+            if save_choice == 's':
+                print(f"\n📋 Email: {email}")
+                print(f"📋 Password: {password}")
+                print("\n💡 Suggerimento: Screenshot o appunta queste credenziali!")
+
+        except KeyboardInterrupt:
+            pass
 
 
 def handle_registration():
@@ -85,7 +118,11 @@ def handle_registration():
         print("🚀 Sistema pronto per la registrazione!\n")
 
         # Avvia conversazione di registrazione
-        assistant.start_conversation()
+        success = assistant.start_conversation()
+
+        if success and hasattr(assistant, 'registration_handler'):
+            # Mostra le credenziali generate
+            show_registration_completion(assistant.registration_handler)
 
     except ImportError as e:
         print(f"❌ Errore caricamento moduli: {e}")
@@ -101,9 +138,10 @@ def handle_registration():
 
 
 def handle_login():
-    """Gestisce il processo di login"""
+    """Gestisce il processo di login con email e password"""
     print("\n🔐 Processo di accesso...")
 
+    # Raccolta email
     while True:
         try:
             email = input("📧 Inserisci la tua email: ").strip()
@@ -125,12 +163,35 @@ def handle_login():
         except Exception:
             print("❌ Errore nell'inserimento. Riprova.")
 
+    # Raccolta password
+    while True:
+        try:
+            # Prova a usare getpass per nascondere la password
+            try:
+                import getpass
+                password = getpass.getpass("🔑 Inserisci la tua password: ")
+            except ImportError:
+                # Fallback se getpass non è disponibile
+                password = input("🔑 Inserisci la tua password: ")
+
+            if not password:
+                print("❌ Password non può essere vuota. Riprova.")
+                continue
+
+            break
+
+        except KeyboardInterrupt:
+            print("\n👋 Operazione annullata.")
+            return False
+        except Exception:
+            print("❌ Errore nell'inserimento. Riprova.")
+
     try:
-        # Importa e usa LoginInHandler
+        # Importa e usa LoginInHandler con email e password
         from utils.login_in_handler import LoginInHandler
 
         print("🔍 Verifica credenziali...")
-        login_handler = LoginInHandler(email)
+        login_handler = LoginInHandler(email, password)
 
         # Se arriviamo qui, il login è andato a buon fine
         print("✅ Login effettuato con successo!")
@@ -142,9 +203,21 @@ def handle_login():
         print(f"❌ Errore caricamento LoginInHandler: {e}")
         return False
     except Exception as e:
-        print(f"❌ Errore durante il login: {e}")
-        import traceback
-        traceback.print_exc()
+        error_message = str(e)
+
+        # Gestisci errori specifici con messaggi user-friendly
+        if "Account non trovato" in error_message:
+            print("❌ Account non trovato per questa email.")
+            print("💡 Suggerimento: Verifica l'email o procedi con la registrazione.")
+        elif "Password errata" in error_message:
+            print("❌ Password errata.")
+            print("💡 Suggerimento: Controlla di aver inserito la password corretta.")
+        elif "Account senza dati di autenticazione" in error_message:
+            print("❌ Account creato prima dell'implementazione del sistema di sicurezza.")
+            print("💡 Contatta il supporto per aggiornare il tuo account.")
+        else:
+            print(f"❌ Errore durante il login: {error_message}")
+
         return False
 
     return True
@@ -201,11 +274,57 @@ def handle_food_diary_chat(assistant):
     print("\nScrivi 'menu' per tornare al menu principale o 'esci' per uscire.")
 
     # Avvia la modalità diario alimentare
-    return assistant.start_food_diary_mode()
+    try:
+        return assistant.start_food_diary_mode()
+    except Exception as e:
+        print(f"❌ Errore nell'avvio del diario alimentare: {e}")
+        print("Torno al menu principale...")
+        return None
+
+
+def handle_password_change(login_handler):
+    """
+    Gestisce il cambio password
+    """
+    print("\n🔑 CAMBIO PASSWORD")
+    print("=" * 50)
+
+    try:
+        # Chiedi la nuova password
+        try:
+            import getpass
+            new_password = getpass.getpass("🔑 Inserisci la nuova password: ")
+            confirm_password = getpass.getpass("🔑 Conferma la nuova password: ")
+        except ImportError:
+            new_password = input("🔑 Inserisci la nuova password: ")
+            confirm_password = input("🔑 Conferma la nuova password: ")
+
+        if not new_password:
+            print("❌ La password non può essere vuota.")
+            return
+
+        if new_password != confirm_password:
+            print("❌ Le password non coincidono.")
+            return
+
+        if len(new_password) < 8:
+            print("❌ La password deve essere lunga almeno 8 caratteri.")
+            return
+
+        # Cambia la password
+        if login_handler.change_password(new_password):
+            print("✅ Password cambiata con successo!")
+        else:
+            print("❌ Errore nel cambio password.")
+
+    except KeyboardInterrupt:
+        print("\n👋 Operazione annullata.")
+    except Exception as e:
+        print(f"❌ Errore: {e}")
 
 
 def start_post_login_session(login_handler):
-    """Avvia la sessione dopo il login completato - VERSIONE AGGIORNATA"""
+    """Avvia la sessione dopo il login completato"""
     print("\n🎯 Sessione avviata!")
     print("I tuoi dati sono già disponibili nel sistema.\n")
 
@@ -219,8 +338,11 @@ def start_post_login_session(login_handler):
         # Passa i dati del paziente all'assistente
         patient_data = login_handler.get_data()
         if patient_data:
-            assistant.set_patient_from_data(patient_data)
-            print("📋 Dati del tuo profilo caricati correttamente.")
+            success = assistant.set_patient_from_data(patient_data)
+            if success:
+                print("📋 Dati del tuo profilo caricati correttamente.")
+            else:
+                print("⚠️ Errore nel caricamento del profilo, procedo comunque.")
 
         # Controlla ricerca semantica
         try:
@@ -256,6 +378,11 @@ def start_post_login_session(login_handler):
                 input("\nPremi INVIO per continuare...")
 
             elif choice == 3:
+                # Cambio password
+                handle_password_change(login_handler)
+                input("\nPremi INVIO per continuare...")
+
+            elif choice == 4:
                 # Esci
                 print("\n👋 Grazie per aver usato Longeviva!")
                 print("Ci vediamo presto per continuare il tuo percorso di benessere!")

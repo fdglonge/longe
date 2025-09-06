@@ -1,3 +1,4 @@
+from datetime import datetime
 import firebase_admin
 from firebase_admin import credentials, firestore
 import os
@@ -11,19 +12,22 @@ sys.path.insert(0, src_dir)
 
 try:
     from Patient.patient_instance import Patient
+    from utils.security_utils import SecurityUtils
 except ImportError:
-    print("⚠️ Impossibile importare Patient - modalità test")
+    print("⚠️ Impossibile importare dipendenze - modalità test")
     Patient = None
+    SecurityUtils = None
 
 
 class LoginInHandler:
     """
-    Classe per la gestione del login.
-    Verifica l'email nel database e recupera i dati del paziente.
+    Classe per la gestione del login con email e password.
+    VERSIONE AGGIORNATA CON AUTENTICAZIONE SICURA
     """
 
-    def __init__(self, email: str):
+    def __init__(self, email: str, password: str):
         self.email = email.lower().strip()  # Normalizza email
+        self.password = password  # Password in chiaro (sarà verificata)
         self.db = None
         self.patient_data = None
         self.patient_doc_id = None
@@ -31,21 +35,20 @@ class LoginInHandler:
 
         # Inizializza Firebase
         if self.firebase_access():
-            # Effettua il login
+            # Effettua il login con email e password
             self.login()
         else:
             raise Exception("Impossibile connettersi al database")
 
     def firebase_access(self) -> bool:
         """
-        Inizializza la connessione a Firebase (stesso pattern del DoctorHandler)
+        Inizializza la connessione a Firebase
         Returns:
             bool: True se la connessione è riuscita, False altrimenti
         """
         try:
             # Controlla se Firebase è già inizializzato
             if not firebase_admin._apps:
-                # Usa la stessa logica del DoctorHandler
                 base_path = os.path.abspath(os.path.dirname(os.path.dirname(__file__)))
                 default_path = os.path.join(base_path, "key_firebase.json")
                 cred_path = os.environ.get('FIREBASE_CREDENTIALS_PATH', default_path)
@@ -89,42 +92,66 @@ class LoginInHandler:
 
     def login(self) -> bool:
         """
-        Controlla se l'email è presente nel database e effettua il login
+        Controlla email e password e effettua il login
         Returns:
             bool: True se il login è riuscito, False altrimenti
         """
         try:
-            print(f"🔍 Ricerca paziente con email: {self.email}")
+            print(f"🔍 Tentativo di login con email: {self.email}")
+
+            # Verifica che SecurityUtils sia disponibile
+            if not SecurityUtils:
+                raise Exception("SecurityUtils non disponibile")
 
             # Query per trovare il paziente con questa email
             patients_ref = self.db.collection('patients')
-
-            # Prima prova a cercare nel campo email diretto
             query = patients_ref.where('email', '==', self.email)
             docs = query.get()
 
-            # Se non trovato, prova nel campo contact_info.email
             if not docs:
-                print("🔍 Cerco in contact_info.email...")
-                query = patients_ref.where('contact_info.email', '==', self.email)
-                docs = query.get()
+                print(f"❌ Nessun account trovato per l'email: {self.email}")
+                raise Exception(f"Account non trovato per l'email: {self.email}")
 
-            if docs:
-                # Paziente trovato
-                for doc in docs:
+            # Paziente trovato, verifica la password
+            for doc in docs:
+                patient_data = doc.to_dict()
+
+                # Controlla che ci siano i dati di autenticazione
+                stored_password_hash = patient_data.get('passwordHash')
+                stored_salt = patient_data.get('passwordSalt')
+
+                if not stored_password_hash or not stored_salt:
+                    print("❌ Account senza dati di autenticazione. Contatta il supporto.")
+                    raise Exception("Account senza dati di autenticazione validi")
+
+                # Verifica la password
+                is_password_valid = SecurityUtils.verify_password(
+                    self.password,
+                    stored_password_hash,
+                    stored_salt
+                )
+
+                if is_password_valid:
+                    # Login riuscito!
                     self.patient_doc_id = doc.id
-                    self.patient_data = doc.to_dict()
+                    self.patient_data = patient_data
                     self.login_successful = True
 
-                    name = self.patient_data.get('name', 'N/A')
-                    surname = self.patient_data.get('surname', 'N/A')
-                    print(f"✅ Login riuscito! Paziente trovato: {name} {surname}")
-                    return True
+                    name = patient_data.get('name', 'N/A')
+                    surname = patient_data.get('surname', 'N/A')
+                    print(f"✅ Login riuscito! Paziente: {name} {surname}")
 
-            # Se arriviamo qui, l'email non è stata trovata
-            print(f"❌ Nessun account trovato per l'email: {self.email}")
-            print("💡 Suggerimento: Verifica l'email o procedi con la registrazione")
-            raise Exception(f"Account non trovato per l'email: {self.email}")
+                    # Aggiorna ultimo accesso
+                    self.update_last_access()
+
+                    return True
+                else:
+                    print("❌ Password errata")
+                    raise Exception("Password errata")
+
+            # Se arriviamo qui, qualcosa è andato storto
+            print("❌ Errore imprevisto durante il login")
+            raise Exception("Errore imprevisto durante l'autenticazione")
 
         except Exception as e:
             print(f"❌ Errore durante il login: {e}")
@@ -176,22 +203,13 @@ class LoginInHandler:
 
         masked = data.copy()
 
-        # Maschera email (controlla entrambe le strutture)
-        email = None
-        if 'email' in masked:
-            email = masked['email']
-        elif 'contact_info' in masked and 'email' in masked['contact_info']:
-            email = masked['contact_info']['email']
-
+        # Maschera email
+        email = masked.get('email', '')
         if email and '@' in email:
             local, domain = email.split('@', 1)
-            masked_email = f"{local[:2]}***@{domain}"
-            if 'email' in masked:
-                masked['email'] = masked_email
-            elif 'contact_info' in masked:
-                masked['contact_info']['email'] = masked_email
+            masked['email'] = f"{local[:2]}***@{domain}"
 
-        # Maschera telefono
+        # Maschera telefono se presente
         if 'contact_info' in masked and 'phone' in masked['contact_info']:
             phone = str(masked['contact_info']['phone'])
             if len(phone) > 4:
@@ -202,6 +220,12 @@ class LoginInHandler:
             cf = masked['fiscalCode']
             if len(cf) > 4:
                 masked['fiscalCode'] = f"***{cf[-4:]}"
+
+        # Rimuovi dati di autenticazione dal log
+        if 'passwordHash' in masked:
+            masked['passwordHash'] = "***MASKED***"
+        if 'passwordSalt' in masked:
+            masked['passwordSalt'] = "***MASKED***"
 
         return masked
 
@@ -215,52 +239,11 @@ class LoginInHandler:
             return None
 
         try:
-            # Crea nuovo paziente
-            patient = Patient()
+            # Crea nuovo paziente dai dati del database
+            patient = Patient(data=self.patient_data)
 
-            # Popola i dati di base
-            patient.set_name(self.patient_data.get('name', ''))
-            patient.set_surname(self.patient_data.get('surname', ''))
-            patient.set_age(self.patient_data.get('age', 0))
-            patient.set_sex(self.patient_data.get('sex', ''))
-
-            # Gestisci city - potrebbe essere in vari campi
-            city = self.patient_data.get('city') or self.patient_data.get('address', {}).get('city', '')
-            patient.set_city(city)
-
-            # Dati fisici
-            if 'height' in self.patient_data:
-                patient.set_height(self.patient_data['height'])
-            if 'weight' in self.patient_data:
-                patient.set_weight(self.patient_data['weight'])
-
-            # Contatti - gestisci entrambe le strutture
-            email = self.patient_data.get('email', '')
-            phone = ''
-
-            # Se ci sono contact_info, usali come priorità
-            contact_info = self.patient_data.get('contact_info', {})
-            if contact_info:
-                email = contact_info.get('email', email)
-                phone = contact_info.get('phone', '')
-
-            patient.set_contact_info(email=email, phone=phone)
-
-            # Informazioni mediche
-            allergies = self.patient_data.get('allergies', '')
-            if isinstance(allergies, list):
-                allergies = ', '.join(allergies) if allergies else 'Nessuna'
-            patient.set_allergies(allergies)
-
-            # Purpose - potrebbe essere in vari campi
-            purpose = (self.patient_data.get('last_purpose') or
-                       self.patient_data.get('purpose') or
-                       self.patient_data.get('lastVisitReason', ''))
-            patient.set_purpose(purpose)
-
-            # Preferenze se disponibili
-            if 'preferences' in self.patient_data:
-                patient.preferences = self.patient_data['preferences']
+            # Imposta l'ID del documento
+            patient.id = self.patient_doc_id
 
             print("✅ Istanza Patient creata dai dati del database")
             return patient
@@ -277,12 +260,12 @@ class LoginInHandler:
             return
 
         try:
-            import datetime
+            from datetime import datetime
 
             doc_ref = self.db.collection('patients').document(self.patient_doc_id)
             doc_ref.update({
-                'last_access': datetime.datetime.now(),
-                'access_count': firestore.Increment(1)
+                'lastAccess': datetime.now().strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3],
+                'accessCount': firestore.Increment(1)
             })
 
             print("📅 Ultimo accesso aggiornato")
@@ -348,15 +331,49 @@ class LoginInHandler:
         """
         return self.patient_doc_id if self.login_successful else None
 
+    def change_password(self, new_password: str) -> bool:
+        """
+        Cambia la password del paziente loggato
+
+        Args:
+            new_password: Nuova password in chiaro
+
+        Returns:
+            bool: True se il cambio è riuscito
+        """
+        if not self.login_successful or not self.patient_doc_id or not SecurityUtils:
+            print("❌ Login non effettuato o SecurityUtils non disponibile")
+            return False
+
+        try:
+            # Hash della nuova password
+            password_hash, password_salt = SecurityUtils.hash_password(new_password)
+
+            # Aggiorna il documento
+            doc_ref = self.db.collection('patients').document(self.patient_doc_id)
+            doc_ref.update({
+                'passwordHash': password_hash,
+                'passwordSalt': password_salt,
+                'updatedAt': datetime.now().strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3]
+            })
+
+            print("✅ Password cambiata con successo")
+            return True
+
+        except Exception as e:
+            print(f"❌ Errore nel cambio password: {e}")
+            return False
+
 
 # Funzione di test
 if __name__ == "__main__":
-    print("🧪 Test LoginInHandler")
+    print("🧪 Test LoginInHandler con autenticazione")
 
     try:
-        email = input("Inserisci email di test: ").strip()
+        email = input("Inserisci email: ").strip()
+        password = input("Inserisci password: ").strip()
 
-        login_handler = LoginInHandler(email)
+        login_handler = LoginInHandler(email, password)
 
         if login_handler.is_logged_in():
             print("\n" + "=" * 50)
@@ -375,8 +392,14 @@ if __name__ == "__main__":
             if patient:
                 print(f"✅ Istanza Patient creata: {patient.get_full_name()}")
 
-            # Aggiorna ultimo accesso
-            login_handler.update_last_access()
+            # Test cambio password (opzionale)
+            change_pwd = input("\nVuoi cambiare la password? (s/n): ").strip().lower()
+            if change_pwd == 's':
+                new_password = input("Nuova password: ").strip()
+                if login_handler.change_password(new_password):
+                    print("✅ Password cambiata!")
+                else:
+                    print("❌ Errore nel cambio password")
 
         else:
             print("❌ Login fallito")
