@@ -2,6 +2,7 @@
 
 import os
 import sys
+from Patient.diet_management import handle_diet_chat_option
 
 # Aggiungi percorsi
 sys.path.append(os.path.dirname(__file__))
@@ -435,10 +436,15 @@ def start_user_session(assistant):
             input("\nPremi INVIO per continuare...")
 
         elif choice == 2:
-            # Chat diario alimentare
-            result = handle_food_diary_chat(assistant)
+            # Chat dieta personalizzata
+            result = handle_diet_chat_option(assistant)
             if result == 'exit':
                 break
+            elif result == 'book_appointment':
+                # Reindirizza alla prenotazione appuntamento
+                result = handle_specialist_booking(assistant)
+                if result == 'exit':
+                    break
             input("\nPremi INVIO per continuare...")
 
         elif choice == 3:
