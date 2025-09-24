@@ -32,6 +32,14 @@ except ImportError:
     print("⚠️ RegistrationHandler non trovato - uso registrazione semplice")
     RegistrationHandler = None
 
+try:
+    from mistralai.client import MistralClient
+    from mistralai.models.chat_completion import ChatMessage
+    MISTRAL_AVAILABLE = True
+except ImportError:
+    MISTRAL_AVAILABLE = False
+    print("⚠️ Mistral AI non installato. Installa con: pip install mistralai")
+
 
 def get_best_doctor_for_purpose(doctors, purpose, city=None, preferences=None):
     """Trova il miglior medico per il problema specificato - VERSIONE MIGLIORATA"""
@@ -498,6 +506,19 @@ class LLMAssistant:
         self.booking_attempts = 0
         self.max_booking_attempts = 3
         self.user_proposed_dates = []
+
+        self.mistral_client = None
+        if MISTRAL_AVAILABLE:
+            try:
+                # Configura con la tua API key di Mistral
+                api_key = os.environ.get('MISTRAL_API_KEY')
+                if api_key:
+                    self.mistral_client = MistralClient(api_key=api_key)
+                    print("✅ Client Mistral configurato")
+                else:
+                    print("⚠️ MISTRAL_API_KEY non trovata nelle variabili d'ambiente")
+            except Exception as e:
+                print(f"❌ Errore configurazione Mistral: {e}")
 
         print("✅ Sistema pronto!")
 
