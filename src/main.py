@@ -99,14 +99,29 @@ def handle_registration():
     print("\n🆕 Avvio processo di registrazione...")
 
     try:
-        from LLM.llm_assistant import LLMAssistant
-        print("✅ Assistente caricato")
+        # MODIFICA: Usa la factory function per LLM automatico
+        from LLM.llm_assistant import create_llm_assistant_auto
+        print("⚡ Inizializzazione assistente intelligente...")
 
-        # Inizializza
-        print("⚡ Inizializzazione...")
-        assistant = LLMAssistant()
+        # Crea assistente con auto-detect del backend migliore
+        assistant = create_llm_assistant_auto()
 
-        # Controlla ricerca semantica
+        # Mostra info sul sistema
+        status = assistant.get_system_status()
+        print(f"✅ Sistema attivo: {status['llm_backend']}")
+
+        if status['llm_backend'] == 'Vertex AI':
+            print("🌐 Connesso a Google Cloud Vertex AI")
+            if status.get('vertex_ai_status', {}).get('project_id'):
+                print(f"📍 Progetto: {status['vertex_ai_status']['project_id']}")
+        else:
+            print("🏠 Modalità locale con Ollama")
+
+        # Test connessione
+        if not assistant.test_llm_connection():
+            print("⚠️ Problema connessione LLM - continuo comunque...")
+
+        # Controlla ricerca semantica (codice esistente)
         try:
             from utils.semantic_search import enhance_doctor_recommendation
             if enhance_doctor_recommendation(assistant):
@@ -118,7 +133,7 @@ def handle_registration():
 
         print("🚀 Sistema pronto per la registrazione!\n")
 
-        # Avvia conversazione di registrazione
+        # Avvia conversazione di registrazione (codice esistente)
         success = assistant.start_conversation()
 
         if success and hasattr(assistant, 'registration_handler'):
@@ -205,9 +220,13 @@ def handle_login():
         # Se arriviamo qui, il login è andato a buon fine
         print("✅ Login effettuato con successo!")
 
-        # Carica assistente e avvia sessione
-        from LLM.llm_assistant import LLMAssistant
-        assistant = LLMAssistant()
+        # auto-detect assistente
+        from LLM.llm_assistant import create_llm_assistant_auto
+        assistant = create_llm_assistant_auto()
+
+        # Mostra backend utilizzato
+        status = assistant.get_system_status()
+        print(f"✅ Login completato! Sistema: {status['llm_backend']}")
 
         # Passa i dati del paziente all'assistente
         patient_data = login_handler.get_data()
@@ -420,6 +439,98 @@ def handle_specialist_booking(assistant):
             print(f"❌ Errore: {e}")
 
 
+def show_system_configuration_menu():
+    """Mostra menu di configurazione del sistema"""
+    print("\n⚙️ CONFIGURAZIONE SISTEMA LONGEVIVA")
+    print("=" * 50)
+    print("1️⃣  - Mostra status sistema")
+    print("2️⃣  - Test connessione LLM")
+    print("3️⃣  - Cambia backend LLM")
+    print("4️⃣  - Configurazione Vertex AI")
+    print("0️⃣  - Torna al menu principale")
+    print("=" * 50)
+
+
+def handle_system_configuration():
+    """Gestisce la configurazione del sistema"""
+    try:
+        from LLM.llm_assistant import create_llm_assistant_auto
+        assistant = create_llm_assistant_auto()
+
+        while True:
+            show_system_configuration_menu()
+            choice = input("Inserisci la tua scelta (0/1/2/3/4): ").strip()
+
+            if choice == "0":
+                break
+            elif choice == "1":
+                # Mostra status
+                status = assistant.get_system_status()
+                print("\n📊 STATUS SISTEMA:")
+                print("=" * 30)
+                print(f"🤖 Backend LLM: {status['llm_backend']}")
+                print(f"☁️ Vertex AI disponibile: {'Sì' if status['vertex_ai_available'] else 'No'}")
+                if status.get('google_cloud_project'):
+                    print(f"📍 Progetto GCloud: {status['google_cloud_project']}")
+                print(f"🗃️ Database pazienti: {'✅' if status['database_initialized']['patients'] else '❌'}")
+                print(f"👨‍⚕️ Database medici: {'✅' if status['database_initialized']['doctors'] else '❌'}")
+                print(f"📋 Medici caricati: {status['total_doctors']}")
+
+            elif choice == "2":
+                # Test connessione
+                print("\n🧪 Test connessione LLM...")
+                if assistant.test_llm_connection():
+                    print("✅ Connessione LLM funzionante!")
+                else:
+                    print("❌ Problema connessione LLM")
+
+            elif choice == "3":
+                # Cambia backend
+                current_backend = "Vertex AI" if assistant.using_vertex_ai else "Ollama"
+                print(f"\n🔄 Backend attuale: {current_backend}")
+                print("Vuoi cambiare a:")
+                print("1. Vertex AI (Google Cloud)")
+                print("2. Ollama (Locale)")
+
+                backend_choice = input("Scelta (1/2): ").strip()
+                if backend_choice == "1":
+                    if assistant.switch_llm_backend(True):
+                        print("✅ Passaggio a Vertex AI completato!")
+                    else:
+                        print("❌ Errore passaggio a Vertex AI")
+                elif backend_choice == "2":
+                    if assistant.switch_llm_backend(False):
+                        print("✅ Passaggio a Ollama completato!")
+                    else:
+                        print("❌ Errore passaggio a Ollama")
+
+            elif choice == "4":
+                # Configurazione Vertex AI
+                print("\n☁️ CONFIGURAZIONE VERTEX AI")
+                print("=" * 30)
+                print("Per usare Vertex AI serve:")
+                print("1. Progetto Google Cloud attivo")
+                print("2. Vertex AI API abilitata")
+                print("3. Credenziali configurate")
+                print("4. Variabile GOOGLE_CLOUD_PROJECT")
+                print()
+
+                current_project = os.environ.get('GOOGLE_CLOUD_PROJECT')
+                if current_project:
+                    print(f"📍 Progetto attuale: {current_project}")
+                else:
+                    print("❌ GOOGLE_CLOUD_PROJECT non configurata")
+                    new_project = input("Inserisci ID progetto Google Cloud (o invio per saltare): ").strip()
+                    if new_project:
+                        os.environ['GOOGLE_CLOUD_PROJECT'] = new_project
+                        print(f"✅ GOOGLE_CLOUD_PROJECT impostata: {new_project}")
+                        print("⚠️ Riavvia l'applicazione per applicare le modifiche")
+
+            input("\nPremi INVIO per continuare...")
+
+    except Exception as e:
+        print(f"❌ Errore configurazione sistema: {e}")
+
 def start_user_session(assistant):
     """Avvia la sessione utente unificata per login e registrazione"""
 
@@ -466,6 +577,7 @@ def main():
     try:
         while True:
             show_welcome_menu()
+            print("3️⃣  - Configurazione sistema")
             choice = get_user_choice()
 
             if choice == 0:
@@ -493,12 +605,31 @@ def main():
                 print("\n👋 Grazie per aver scelto Longeviva!")
                 break
 
+            elif choice == 3:
+                # NUOVO: Configurazione sistema
+                handle_system_configuration()
+
     except KeyboardInterrupt:
         print("\n👋 Sistema chiuso dall'utente")
     except Exception as e:
         print(f"❌ Errore generale: {e}")
         import traceback
         traceback.print_exc()
+
+def get_user_choice_extended():
+    """Ottiene la scelta dell'utente (versione estesa)"""
+    while True:
+        try:
+            choice = input("Inserisci la tua scelta (0/1/2/3): ").strip()
+            if choice in ['0', '1', '2', '3']:
+                return int(choice)
+            else:
+                print("❌ Scelta non valida. Inserisci 0, 1, 2 o 3.")
+        except KeyboardInterrupt:
+            print("\n👋 Arrivederci!")
+            sys.exit(0)
+        except Exception:
+            print("❌ Input non valido. Riprova.")
 
 
 if __name__ == "__main__":

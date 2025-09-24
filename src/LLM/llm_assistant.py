@@ -25,6 +25,14 @@ from Patient.patients_handler import PatientHandler
 from Patient.patient_instance import Patient
 from Doctor.doctor_instance import Doctor, create_sample_doctors
 
+# Nuovo import per Vertex AI
+try:
+    from LLM.vertex_llm_instance import VertexLLM, create_llm_instance
+    VERTEX_AI_AVAILABLE = True
+except ImportError:
+    VERTEX_AI_AVAILABLE = False
+    print("⚠️ Vertex AI non disponibile - fallback a Ollama")
+
 # Import utility per registrazione
 try:
     from utils.registration_handler import RegistrationHandler
@@ -40,6 +48,17 @@ except ImportError:
     MISTRAL_AVAILABLE = False
     print("⚠️ Mistral AI non installato. Installa con: pip install mistralai")
 
+def create_llm_assistant_auto():
+    """
+    Crea automaticamente LLMAssistant con la migliore configurazione disponibile
+    """
+    # Controlla se Vertex AI è configurato
+    if VERTEX_AI_AVAILABLE and os.environ.get('GOOGLE_CLOUD_PROJECT'):
+        print("🌐 Vertex AI rilevato - uso configurazione cloud")
+        return LLMAssistant(use_vertex_ai=True)
+    else:
+        print("🏠 Vertex AI non configurato - uso Ollama locale")
+        return LLMAssistant(use_vertex_ai=False)
 
 def get_best_doctor_for_purpose(doctors, purpose, city=None, preferences=None):
     """Trova il miglior medico per il problema specificato - VERSIONE MIGLIORATA"""
@@ -479,8 +498,15 @@ class LLMAssistant:
     Assistente LLM principale per Longeviva - VERSIONE COMPLETA E PULITA
     """
 
-    def __init__(self, model_name="mistral:7b"):
+    def __init__(self, model_name="mistral:7b", use_vertex_ai=None):
         print("🏥 Inizializzazione del sistema Longeviva...")
+
+        # Determina quale LLM usare
+        if use_vertex_ai is None:
+            # Auto-detect: usa Vertex AI se disponibile e configurato
+            use_vertex_ai = VERTEX_AI_AVAILABLE and os.environ.get('GOOGLE_CLOUD_PROJECT')
+
+        self.using_vertex_ai = use_vertex_ai
 
         # Inizializza handler database
         self.patient_db = PatientHandler()
@@ -491,8 +517,23 @@ class LLMAssistant:
         self._show_database_stats()
 
         # Inizializza LLM
-        self.model_name = model_name
-        self.llm = LLM(self.model_name)
+        #self.model_name = model_name
+        if self.using_vertex_ai:
+            print("🌐 Configurazione Vertex AI...")
+            try:
+                # Per Vertex AI, usa Gemini come modello predefinito
+                vertex_model = "gemini-1.5-flash" if model_name == "mistral:7b" else model_name
+                self.llm = VertexLLM(model_name=vertex_model)
+                print(f"✅ Vertex AI configurato con modello: {vertex_model}")
+            except Exception as e:
+                print(f"❌ Errore Vertex AI, fallback a Ollama: {e}")
+                from LLM.llm_instance import LLM
+                self.llm = LLM(model_name)
+                self.using_vertex_ai = False
+        else:
+            print("🏠 Configurazione Ollama locale...")
+            from LLM.llm_instance import LLM
+            self.llm = LLM(model_name)
 
         # Stato conversazione
         self.conversation_state = "structured_registration"
@@ -521,6 +562,57 @@ class LLMAssistant:
                 print(f"❌ Errore configurazione Mistral: {e}")
 
         print("✅ Sistema pronto!")
+
+    def switch_llm_backend(self, use_vertex_ai: bool):
+        """
+        Cambia backend LLM dinamicamente
+        """
+        if use_vertex_ai == self.using_vertex_ai:
+            return True
+
+        try:
+            if use_vertex_ai and VERTEX_AI_AVAILABLE:
+                print("🔄 Passaggio a Vertex AI...")
+                self.llm = VertexLLM()
+                self.using_vertex_ai = True
+                print("✅ Vertex AI attivato")
+            else:
+                print("🔄 Passaggio a Ollama...")
+                from LLM.llm_instance import LLM
+                self.llm = LLM()
+                self.using_vertex_ai = False
+                print("✅ Ollama attivato")
+
+            return True
+
+        except Exception as e:
+            print(f"❌ Errore cambio backend: {e}")
+            return False
+
+    # METODO NUOVO: Status del sistema
+    def get_system_status(self):
+        """
+        Ritorna lo status completo del sistema
+        """
+        status = {
+            'llm_backend': 'Vertex AI' if self.using_vertex_ai else 'Ollama',
+            'llm_available': bool(self.llm),
+            'vertex_ai_available': VERTEX_AI_AVAILABLE,
+            'google_cloud_project': os.environ.get('GOOGLE_CLOUD_PROJECT'),
+            'database_initialized': {
+                'patients': self.patient_db.initialized,
+                'doctors': self.doctor_db.initialized
+            },
+            'total_doctors': len(self.available_doctors),
+            'patient_authenticated': self.authenticated,
+            'conversation_state': self.conversation_state
+        }
+
+        # Se usiamo Vertex AI, aggiungi info specifiche
+        if self.using_vertex_ai and hasattr(self.llm, 'check_vertex_ai_status'):
+            status['vertex_ai_status'] = self.llm.check_vertex_ai_status()
+
+        return status
 
     def _load_doctors(self):
         """Carica medici dal database o usa esempi"""
@@ -752,6 +844,35 @@ class LLMAssistant:
                 continue
 
         return True
+
+    def get_llm_response(self, user_input: str, system_prompt: str = None) -> str:
+        """
+        Genera risposta LLM con gestione migliorata per Vertex AI
+        """
+        try:
+            if not self.llm:
+                return "Mi dispiace, il sistema LLM non è disponibile al momento."
+
+            # Per Vertex AI, usa la chat session se disponibile
+            if self.using_vertex_ai and hasattr(self.llm, 'send_message_in_session'):
+                # Controlla se c'è una chat session attiva
+                if not getattr(self.llm, 'chat_session', None):
+                    self.llm.start_chat_session()
+
+                # Includi system prompt se necessario
+                full_message = user_input
+                if system_prompt:
+                    full_message = f"[CONTESTO: {system_prompt}]\n\n{user_input}"
+
+                return self.llm.send_message_in_session(full_message)
+            else:
+                # Usa il metodo standard
+                response, _ = self.llm.generate_response(user_input, system_prompt)
+                return response
+
+        except Exception as e:
+            print(f"❌ Errore generazione risposta: {e}")
+            return "Mi dispiace, ho avuto un problema nella generazione della risposta. Riprova."
 
     def process_user_input(self, user_input):
         """Processa l'input dell'utente in base allo stato"""
@@ -2026,7 +2147,7 @@ class LLMAssistant:
             return date_str
 
     def start_food_diary_mode(self):
-        """Avvia la modalità diario alimentare con Mistral"""
+        """Avvia la modalità diario alimentare - migliorata per Vertex AI"""
         self.conversation_state = "food_diary_mode"
         self.food_diary_session = {
             'start_time': datetime.now(),
@@ -2034,14 +2155,18 @@ class LLMAssistant:
             'context': []
         }
 
-        # Crea il prompt di sistema personalizzato per il diario alimentare
+        # Crea il prompt di sistema personalizzato
         system_prompt = self._create_food_diary_system_prompt()
 
         # Messaggio di benvenuto personalizzato
         welcome_prompt = self._create_food_diary_welcome_prompt()
 
+        # Per Vertex AI, avvia chat session specifica per diario alimentare
+        if self.using_vertex_ai and hasattr(self.llm, 'start_chat_session'):
+            self.llm.start_chat_session()
+
         # Genera la prima risposta di Longi
-        response, context = self.generate_response(welcome_prompt, system_prompt)
+        response = self.get_llm_response(welcome_prompt, system_prompt)
         print(f"\nLongi: {response}")
 
         # Avvia il loop della chat
@@ -2298,3 +2423,15 @@ class LLMAssistant:
     Max 150 parole, usa emoji appropriati."""
 
         return prompt
+
+    def test_llm_connection(self):
+        """
+        Testa la connessione LLM corrente
+        """
+        try:
+            test_response = self.get_llm_response("Ciao, questo è un test di connessione.")
+            print(f"✅ Test LLM riuscito: {test_response[:100]}...")
+            return True
+        except Exception as e:
+            print(f"❌ Test LLM fallito: {e}")
+            return False
