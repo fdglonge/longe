@@ -221,7 +221,7 @@ if __name__ == "__main__":
     print(f"Vertex AI: {os.environ.get('GOOGLE_CLOUD_PROJECT', 'Non configurato')}")
 
     uvicorn.run(
-        app,
+        "api_server:app",
         host=host,
         port=port,
         reload=False

@@ -6,6 +6,7 @@
 set -e  # Exit on error
 
 PROJECT_ID=""
+#REGION="europe-west4"
 REGION="us-central1"
 SERVICE_NAME="longeviva-api"
 DEPLOYMENT_TYPE=""

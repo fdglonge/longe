@@ -1,0 +1,11 @@
+# Crea requirements_api.txt
+cat > requirements_api.txt << EOF
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+pydantic==2.5.0
+python-multipart==0.0.6
+google-cloud-aiplatform==1.38.0
+google-cloud-firestore==2.13.1
+requests==2.31.0
+python-dotenv==1.0.0
+EOF

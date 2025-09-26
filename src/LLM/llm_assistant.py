@@ -521,10 +521,9 @@ class LLMAssistant:
         if self.using_vertex_ai:
             print("🌐 Configurazione Vertex AI...")
             try:
-                # Per Vertex AI, usa Gemini come modello predefinito
-                vertex_model = "gemini-1.5-flash" if model_name == "mistral:7b" else model_name
-                self.llm = VertexLLM(model_name=vertex_model)
-                print(f"✅ Vertex AI configurato con modello: {vertex_model}")
+                # MODIFICA: Forza Mistral Small invece di Gemini
+                self.llm = VertexLLM(model_name="mistral-small-2503")
+                print(f"✅ Vertex AI configurato con Mistral Small")
             except Exception as e:
                 print(f"❌ Errore Vertex AI, fallback a Ollama: {e}")
                 from LLM.llm_instance import LLM
