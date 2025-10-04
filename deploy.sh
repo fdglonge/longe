@@ -8,7 +8,7 @@ set -e  # Exit on error
 PROJECT_ID=""
 #REGION="europe-west4"
 REGION="us-central1"
-SERVICE_NAME="longeviva-api"
+SERVICE_NAME="longi-ai-apis"
 DEPLOYMENT_TYPE=""
 
 # Colors for output

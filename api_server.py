@@ -9,18 +9,18 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from datetime import datetime
 
-# Setup paths - siamo nella root
+# Setup paths
 current_dir = os.path.dirname(__file__)
 sys.path.insert(0, current_dir)
 sys.path.insert(0, os.path.join(current_dir, 'src'))
 
 # Import routes
-from src.api import patient_routes
+from src.api import patient_routes, doctor_routes, longi_routes
 
 # FastAPI app
 app = FastAPI(
-    title="Longeviva API",
-    description="API per gestione pazienti e assistenza medica con AI",
+    title="Longi AI APIs",
+    description="API intelligenti per Longeviva con Vertex AI",
     version="2.0.0"
 )
 
@@ -36,8 +36,20 @@ app.add_middleware(
 # Registra routes
 app.include_router(
     patient_routes.router,
-    prefix="/api/v1/pazienti",
+    #prefix="/api/v1/pazienti",
     tags=["Pazienti"]
+)
+
+app.include_router(
+    doctor_routes.router,
+    #prefix="/api/v1/dottori",
+    tags=["Dottori"]
+)
+
+app.include_router(
+    longi_routes.router,
+    #prefix="/api/v1/longi",
+    tags=["Longi AI"]
 )
 
 
@@ -45,7 +57,7 @@ app.include_router(
 @app.get("/")
 async def root():
     return {
-        "service": "Longeviva API",
+        "service": "Longi AI APIs",
         "version": "2.0.0",
         "status": "active",
         "docs": "/docs"
@@ -60,15 +72,6 @@ async def health():
         "vertex_ai_configured": bool(os.environ.get('GOOGLE_CLOUD_PROJECT'))
     }
 
-from src.api import doctor_routes
-
-# Registra routes dottori
-app.include_router(
-    doctor_routes.router,
-    prefix="/api/v1/dottori",
-    tags=["Dottori"]
-)
-
 
 if __name__ == "__main__":
     import uvicorn
@@ -77,7 +80,7 @@ if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8080))
 
     print(f"\n{'=' * 50}")
-    print(f"Longeviva API Server")
+    print(f"Longi AI APIs")
     print(f"{'=' * 50}")
     print(f"Host: http://{host}:{port}")
     print(f"Docs: http://{host}:{port}/docs")
