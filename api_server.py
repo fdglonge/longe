@@ -36,19 +36,19 @@ app.add_middleware(
 # Registra routes
 app.include_router(
     patient_routes.router,
-    #prefix="/api/v1/pazienti",
+    prefix="/api/v1/pazienti",
     tags=["Pazienti"]
 )
 
 app.include_router(
     doctor_routes.router,
-    #prefix="/api/v1/dottori",
+    prefix="/api/v1/dottori",
     tags=["Dottori"]
 )
 
 app.include_router(
     longi_routes.router,
-    #prefix="/api/v1/longi",
+    prefix="/api/v1/longi",
     tags=["Longi AI"]
 )
 
