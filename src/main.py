@@ -25,7 +25,7 @@ app = FastAPI(
 # CORS - permetti richieste da frontend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In produzione: ["https://tuodominio.com"]
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -34,13 +34,13 @@ app.add_middleware(
 # Includi routes
 app.include_router(
     patient_routes.router,
-    prefix="/api/patients",
+    prefix="/api/patients/v1",
     tags=["Patients 👤"]
 )
 
 app.include_router(
     doctor_routes.router,
-    prefix="/api/doctors",
+    prefix="/api/doctors/v1",
     tags=["Doctors 🩺"]
 )
 

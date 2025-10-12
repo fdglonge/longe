@@ -11,7 +11,7 @@ class InserisciAnagraficaRequest(BaseModel):
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
-                "messaggio": "Mi chiamo Mario Rossi, la mia email è mario.rossi@email.com. Sono nato il 28 gennaio 1990 a Roma ma attualmente vivo a Milano. Sono un uomo, sono alto 175 centimetri e peso 70 kg."
+                "messaggio": "La mia email è mario.rossi@email.com. Sono nato il 28 gennaio 1990 a Roma ma attualmente vivo a Milano. Sono un uomo, sono alto 175 centimetri e peso 70 kg."
             }
         }
     )
@@ -33,7 +33,7 @@ class CompletaStoriaMedicaRequest(BaseModel):
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
-                "messaggio": "Non ho allergie alimentari o farmacologiche. Non bevo alcol, dormo circa 7-8 ore per notte. Faccio sport 3 volte a settimana, principalmente corsa a intensità moderata. Non sono fumatore. Seguo una dieta mediterranea con molta frutta e verdura. Ho scaricato Longeviva perché voglio migliorare il mio stile di vita in modo strutturato. Il mio obiettivo principale è perdere peso e avere più energia durante la giornata. Mi aspetto un percorso personalizzato con consigli pratici. Per la scelta del medico, la vicinanza è molto importante per me, così come la specializzazione. Il costo non è un problema prioritario."
+                "messaggio": "Non ho allergie alimentari o farmacologiche. Non bevo alcol, dormo circa 7-8 ore per notte. Faccio sport 3 volte a settimana, principalmente corsa a intensità moderata. Non sono fumatore. Seguo una dieta mediterranea."
             }
         }
     )
@@ -47,27 +47,55 @@ class CompletaStoriaMedicaResponse(BaseModel):
     campi_mancanti: List[str]
 
 
-# ============ RICEVI SOMMARIO ============
+# ============ GENERA SOMMARIO ============
 
-class PatientSummaryInfo(BaseModel):
-    nome: str
-    cognome: str
-    email: str
-    eta: int
-    sesso: str
+class OnBoardingData(BaseModel):
+    expectations: List[str] = Field(..., description="Aspettative del paziente")
+    goals: List[str] = Field(..., description="Obiettivi del paziente")
+    reasons: List[str] = Field(..., description="Motivi per cui ha scelto Longeviva")
 
 
-class SommarioCompleto(BaseModel):
-    anagrafica: dict
-    lifestyle: dict
-    allergie: List[str]
-    obiettivi: dict
-    preferenze_medico: dict
-    sintesi_testuale: Optional[str] = None
+class GeneraSommarioRequest(BaseModel):
+    nome: str = Field(..., min_length=1, description="Nome del paziente")
+    onBoardingData: OnBoardingData
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "nome": "Mario",
+                "onBoardingData": {
+                    "expectations": [
+                        "Un percorso personalizzato",
+                        "Consigli pratici",
+                        "Supporto costante"
+                    ],
+                    "goals": [
+                        "Perdere peso",
+                        "Avere più energia",
+                        "Migliorare la salute generale"
+                    ],
+                    "reasons": [
+                        "Voglio migliorare il mio stile di vita",
+                        "Cerco un approccio strutturato",
+                        "Mi interessa la longevità"
+                    ]
+                }
+            }
+        }
+    )
 
 
-class RiceviSommarioResponse(BaseModel):
+class GeneraSommarioResponse(BaseModel):
     success: bool
-    patient: PatientSummaryInfo
-    sommario: SommarioCompleto
-    generated_at: str
+    message: str
+    onBoardingSummary: str = Field(..., description="Sommario generato dall'AI")
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "success": True,
+                "message": "Sommario generato con successo",
+                "onBoardingSummary": "Mario ha scelto Longeviva per migliorare il suo stile di vita in modo strutturato, con particolare interesse verso la longevità. I suoi obiettivi principali sono perdere peso, aumentare i livelli di energia e migliorare la salute generale. Si aspetta un percorso personalizzato con consigli pratici e un supporto costante nel suo percorso di benessere."
+            }
+        }
+    )

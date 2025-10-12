@@ -10,12 +10,16 @@ from api.schemas.patient_schemas import (
     InserisciAnagraficaResponse,
     CompletaStoriaMedicaRequest,
     CompletaStoriaMedicaResponse,
-    RiceviSommarioResponse,
-    PatientSummaryInfo,
-    SommarioCompleto
+    #RiceviSommarioResponse,
+    #PatientSummaryInfo,
+    #SommarioCompleto,
+    GeneraSommarioResponse,
+    GeneraSommarioRequest,
+    OnBoardingData
 )
 from dependencies import get_patient_handler
 from Patient.patients_handler import PatientHandler
+from LLM.llm_assistant import LLMAssistant
 
 router = APIRouter()
 
@@ -310,10 +314,10 @@ async def inserisci_anagrafica(
         }
 
         campi_obbligatori = {
-            'email': 'Email',
-            'data_nascita': 'Data di nascita',
-            'sesso': 'Sesso',
-            'citta_nascita': 'Città di nascita'
+            'email': 'email',
+            'data_nascita': 'data di nascita',
+            'sesso': 'sesso',
+            'citta_nascita': 'città di nascita'
         }
 
         campi_mancanti = [
@@ -361,9 +365,9 @@ async def completa_storiamedica(
         dati_estratti = {
             'allergie': allergie,
             'lifestyle': lifestyle,
-            'obiettivi': {'testo_completo': request.messaggio[:500]},
-            'motivo_visita': request.messaggio[:300],
-            'scelta_medico': scelta_medico
+            #'obiettivi': {'testo_completo': request.messaggio[:500]},
+            #'motivo_visita': request.messaggio[:300],
+            #'scelta_medico': scelta_medico
         }
 
         campi_mancanti = [campo for campo, valore in lifestyle.items() if valore is None]
@@ -383,55 +387,107 @@ async def completa_storiamedica(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/ricevi_sommario/{email}", response_model=RiceviSommarioResponse)
-async def ricevi_sommario(
-        email: str,
-        patient_handler: PatientHandler = Depends(get_patient_handler)
-):
+@router.post("/genera_sommario", response_model=GeneraSommarioResponse)
+async def genera_sommario(request: GeneraSommarioRequest):
+    """
+    Genera un sommario personalizzato dall'onboarding del paziente.
+    Accetta sia numeri (1,2,3) che stringhe complete come input.
+    """
     try:
-        patient = patient_handler.search_patient_by_email(email)
-
-        if not patient:
-            raise HTTPException(status_code=404, detail="Paziente non trovato")
-
-        patient_info = PatientSummaryInfo(
-            nome=patient.get_name(),
-            cognome=patient.get_surname(),
-            email=patient.get_email(),
-            eta=patient.get_age() or 0,
-            sesso=patient.get_sex()
-        )
-
-        anagrafica = {
-            "nome": patient.get_name(),
-            "cognome": patient.get_surname(),
-            "email": patient.get_email(),
-            "codice_fiscale": patient.get_fiscal_code(),
-            "data_nascita": patient.get_birth_date(),
-            "eta": patient.get_age(),
-            "sesso": patient.get_sex(),
-            "altezza": patient.get_height(),
-            "peso": patient.get_weight()
+        # Mappatura delle opzioni disponibili
+        REASONS_MAP = {
+            1: "vuoi migliorare il tuo stile di vita con un supporto pratico e costante",
+            2: "hai bisogno di un aiuto concreto per rimetterti in forma",
+            3: "cerchi un modo semplice per mangiare meglio e muoverti di più",
+            4: "ti interessa la longevità e vuoi prenderti cura della tua salute oggi",
+            5: "ti ha incuriosito l'approccio innovativo con l'AI e la community"
         }
 
-        sommario = SommarioCompleto(
-            anagrafica=anagrafica,
-            lifestyle=patient.get_lifestyle() or {},
-            allergie=patient.allergies if hasattr(patient, 'allergies') else [],
-            obiettivi={"testo_completo": patient.get_additional_notes() or ""},
-            preferenze_medico={},
-            sintesi_testuale=patient.get_additional_notes()
-        )
+        GOALS_MAP = {
+            1: "perdere peso in modo sano e sostenibile",
+            2: "avere più energia durante la giornata",
+            3: "migliorare la tua composizione corporea",
+            4: "aumentare la tua consapevolezza alimentare",
+            5: "vivere più a lungo e in salute",
+            6: "sentirti meglio fisicamente e mentalmente"
+        }
 
-        return RiceviSommarioResponse(
+        EXPECTATIONS_MAP = {
+            1: "un percorso personalizzato e facile da seguire",
+            2: "consigli pratici, non complicati",
+            3: "sentirti seguito/a da chi capisce le tue esigenze",
+            4: "imparare abitudini che durino nel tempo",
+            5: "un'esperienza motivante che ti tenga attivo/a e coinvolto/a"
+        }
+
+        def process_item(item: str, mapping: dict) -> str:
+            """
+            Processa un singolo item: se è un numero usa la mappa,
+            altrimenti usa la stringa così com'è.
+            """
+            item = item.strip()
+
+            # Se è un numero, usa la mappatura
+            if item.isdigit():
+                num = int(item)
+                if num in mapping:
+                    return mapping[num]
+
+            # Altrimenti usa la stringa com'è (lowercase per uniformità)
+            return item.lower()
+
+        def format_list(items: List[str]) -> str:
+            """Formatta una lista in testo naturale"""
+            if not items:
+                return ""
+            if len(items) == 1:
+                return items[0]
+            elif len(items) == 2:
+                return f"{items[0]} e {items[1]}"
+            else:
+                return ", ".join(items[:-1]) + f" e {items[-1]}"
+
+        # Processa reasons
+        reasons_text = [
+            process_item(reason, REASONS_MAP)
+            for reason in request.onBoardingData.reasons
+        ]
+
+        # Processa goals
+        goals_text = [
+            process_item(goal, GOALS_MAP)
+            for goal in request.onBoardingData.goals
+        ]
+
+        # Processa expectations
+        expectations_text = [
+            process_item(exp, EXPECTATIONS_MAP)
+            for exp in request.onBoardingData.expectations
+        ]
+
+        # Costruisci il sommario discorsivo
+        sommario = f"Ciao {request.nome}! "
+
+        if reasons_text:
+            reasons_formatted = format_list(reasons_text)
+            sommario += f"Hai scelto Longeviva perché {reasons_formatted}. "
+
+        if goals_text:
+            goals_formatted = format_list(goals_text)
+            sommario += f"I tuoi obiettivi principali sono {goals_formatted}. "
+
+        if expectations_text:
+            expectations_formatted = format_list(expectations_text)
+            sommario += f"Ti aspetti {expectations_formatted}. "
+
+        sommario += "Siamo entusiasti di accompagnarti in questo percorso verso una vita più lunga e sana!"
+
+        return GeneraSommarioResponse(
             success=True,
-            patient=patient_info,
-            sommario=sommario,
-            generated_at=datetime.now().isoformat()
+            message="Sommario generato con successo",
+            onBoardingSummary=sommario.strip()
         )
 
-    except HTTPException:
-        raise
     except Exception as e:
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
