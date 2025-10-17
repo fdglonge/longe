@@ -6,9 +6,9 @@ from collections import defaultdict
 import re
 
 from .schemas.longi_schemas import GeneraListaSpesaResponse
-from ..dependencies import get_patient_handler, get_vertex_llm
-from ..Patient.patients_handler import PatientHandler
-from ..LLM.vertex_llm_instance import VertexLLM
+from src.dependencies import get_patient_handler, get_vertex_llm
+from src.Patient.patients_handler import PatientHandler
+from src.LLM.vertex_llm_instance import VertexLLM
 
 router = APIRouter()
 

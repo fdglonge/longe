@@ -1,7 +1,7 @@
 # src/api/dependencies.py
 from firebase_admin import firestore
-from Patient.patients_handler import PatientHandler
-from LLM.vertex_llm_instance import VertexLLM
+from src.Patient.patients_handler import PatientHandler
+from src.LLM.vertex_llm_instance import VertexLLM
 from typing import Optional
 
 # Singleton instances

@@ -8,8 +8,8 @@ import os
 # Aggiungi il path per importare dalle directory parent
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
-from Patient.patients_handler import PatientHandler
-from utils.security_utils import SecurityUtils
+from src.Patient.patients_handler import PatientHandler
+from src.utils.security_utils import SecurityUtils
 
 
 def calculate_age_from_birthdate(birth_date_str):

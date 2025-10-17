@@ -17,9 +17,9 @@ from .schemas.patient_schemas import (
     GeneraSommarioRequest,
     OnBoardingData
 )
-from ..dependencies import get_patient_handler
-from ..Patient.patients_handler import PatientHandler
-from ..LLM.llm_assistant import LLMAssistant
+from src.dependencies import get_patient_handler
+from src.Patient.patients_handler import PatientHandler
+from src.LLM.llm_assistant import LLMAssistant
 
 router = APIRouter()
 

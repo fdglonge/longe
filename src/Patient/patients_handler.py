@@ -1,12 +1,12 @@
 import firebase_admin
 from firebase_admin import credentials, firestore
 import os
-from Patient.patient_instance import Patient
+from src.Patient.patient_instance import Patient
 from datetime import datetime
 import json
 
 # Import delle nuove utility di sicurezza
-from utils.security_utils import SecurityUtils
+from src.utils.security_utils import SecurityUtils
 
 
 class PatientHandler:

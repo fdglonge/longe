@@ -1,7 +1,7 @@
 import firebase_admin
 from firebase_admin import credentials, firestore
 import os
-from Doctor.doctor_instance import Doctor
+from src.Doctor.doctor_instance import Doctor
 from datetime import datetime
 
 

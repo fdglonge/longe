@@ -358,7 +358,7 @@ Max 150 parole, usa emoji appropriati."""
 def apply_food_diary_extension():
     """Applica automaticamente l'estensione del diario alimentare"""
     try:
-        from LLM.llm_assistant import LLMAssistant
+        from src.LLM.llm_assistant import LLMAssistant
         extend_llm_assistant_with_food_diary(LLMAssistant)
         print("✅ Estensione diario alimentare applicata con successo")
         return True

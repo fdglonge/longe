@@ -1,5 +1,5 @@
-from Patient.patient_instance import Patient
-from Doctor.doctor_instance import Doctor
+from src.Patient.patient_instance import Patient
+from src.Doctor.doctor_instance import Doctor
 import re
 import json
 import traceback
@@ -792,7 +792,7 @@ class LLM:
         print(f"\nAssistente: {response}")
 
         # Crea un medico fittizio
-        from Doctor.doctor_instance import Doctor
+        from src.Doctor.doctor_instance import Doctor
         self.recommended_doctor = Doctor(
             name="Mario",
             surname="Rossi",

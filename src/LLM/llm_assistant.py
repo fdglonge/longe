@@ -19,15 +19,15 @@ sys.path.insert(0, src_dir)
 warnings.filterwarnings("ignore", category=UserWarning, module="google.cloud.firestore_v1.base_collection")
 
 # Import moduli
-from LLM.llm_instance import LLM
-from Doctor.doctors_handler import DoctorHandler
-from Patient.patients_handler import PatientHandler
-from Patient.patient_instance import Patient
-from Doctor.doctor_instance import Doctor, create_sample_doctors
+from src.LLM.llm_instance import LLM
+from src.Doctor.doctors_handler import DoctorHandler
+from src.Patient.patients_handler import PatientHandler
+from src.Patient.patient_instance import Patient
+from src.Doctor.doctor_instance import Doctor, create_sample_doctors
 
 # Nuovo import per Vertex AI
 try:
-    from LLM.vertex_llm_instance import VertexLLM, create_llm_instance
+    from src.LLM.vertex_llm_instance import VertexLLM, create_llm_instance
     VERTEX_AI_AVAILABLE = True
 except ImportError:
     VERTEX_AI_AVAILABLE = False
@@ -35,7 +35,7 @@ except ImportError:
 
 # Import utility per registrazione
 try:
-    from utils.registration_handler import RegistrationHandler
+    from src.utils.registration_handler import RegistrationHandler
 except ImportError:
     print("⚠️ RegistrationHandler non trovato - uso registrazione semplice")
     RegistrationHandler = None
@@ -526,12 +526,12 @@ class LLMAssistant:
                 print(f"✅ Vertex AI configurato con Mistral Small")
             except Exception as e:
                 print(f"❌ Errore Vertex AI, fallback a Ollama: {e}")
-                from LLM.llm_instance import LLM
+                from src.LLM.llm_instance import LLM
                 self.llm = LLM(model_name)
                 self.using_vertex_ai = False
         else:
             print("🏠 Configurazione Ollama locale...")
-            from LLM.llm_instance import LLM
+            from src.LLM.llm_instance import LLM
             self.llm = LLM(model_name)
 
         # Stato conversazione
@@ -577,7 +577,7 @@ class LLMAssistant:
                 print("✅ Vertex AI attivato")
             else:
                 print("🔄 Passaggio a Ollama...")
-                from LLM.llm_instance import LLM
+                from src.LLM.llm_instance import LLM
                 self.llm = LLM()
                 self.using_vertex_ai = False
                 print("✅ Ollama attivato")
@@ -1376,7 +1376,7 @@ class LLMAssistant:
 
         try:
             # Importa il matcher semantico
-            from utils.semantic_search import SemanticDoctorMatcher
+            from src.utils.semantic_search import SemanticDoctorMatcher
             matcher = SemanticDoctorMatcher()
 
             # Trova i migliori medici

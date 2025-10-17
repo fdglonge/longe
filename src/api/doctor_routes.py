@@ -8,10 +8,10 @@ from .schemas.doctor_schemas import (
     RaccomandaDottoreResponse,
     DoctorInfo
 )
-from ..dependencies import get_patient_handler
-from ..Patient.patients_handler import PatientHandler
-from ..Doctor.doctors_handler import DoctorHandler
-from ..utils.semantic_search import SemanticDoctorMatcher
+from src.dependencies import get_patient_handler
+from src.Patient.patients_handler import PatientHandler
+from src.Doctor.doctors_handler import DoctorHandler
+from src.utils.semantic_search import SemanticDoctorMatcher
 
 router = APIRouter()
 
