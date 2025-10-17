@@ -3,15 +3,15 @@ from fastapi import APIRouter, HTTPException, Depends
 import traceback
 import numpy as np
 
-from api.schemas.doctor_schemas import (
+from .schemas.doctor_schemas import (
     RaccomandaDottoreRequest,
     RaccomandaDottoreResponse,
     DoctorInfo
 )
-from dependencies import get_patient_handler
-from Patient.patients_handler import PatientHandler
-from Doctor.doctors_handler import DoctorHandler
-from utils.semantic_search import SemanticDoctorMatcher
+from ..dependencies import get_patient_handler
+from ..Patient.patients_handler import PatientHandler
+from ..Doctor.doctors_handler import DoctorHandler
+from ..utils.semantic_search import SemanticDoctorMatcher
 
 router = APIRouter()
 

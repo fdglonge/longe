@@ -5,7 +5,7 @@ import traceback
 import re
 from typing import Dict, Any, Optional, List
 
-from api.schemas.patient_schemas import (
+from .schemas.patient_schemas import (
     InserisciAnagraficaRequest,
     InserisciAnagraficaResponse,
     CompletaStoriaMedicaRequest,
@@ -17,9 +17,9 @@ from api.schemas.patient_schemas import (
     GeneraSommarioRequest,
     OnBoardingData
 )
-from dependencies import get_patient_handler
-from Patient.patients_handler import PatientHandler
-from LLM.llm_assistant import LLMAssistant
+from ..dependencies import get_patient_handler
+from ..Patient.patients_handler import PatientHandler
+from ..LLM.llm_assistant import LLMAssistant
 
 router = APIRouter()
 
