@@ -5,7 +5,7 @@
 
 set -e  # Exit on error
 
-PROJECT_ID=""
+PROJECT_ID="longeviva-web-app-dev"
 #REGION="europe-west4"
 REGION="us-central1"
 SERVICE_NAME="longi-ai-apis"

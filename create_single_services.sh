@@ -102,13 +102,12 @@ uvicorn[standard]==0.24.0
 pydantic==2.5.0
 google-cloud-aiplatform==1.38.0
 google-cloud-firestore==2.13.1
+firebase-admin
 python-multipart==0.0.6
 httpx==0.25.2
 python-dotenv==1.0.0
-vertexai
-firebase-admin
 numpy==1.24.3
-traceback2==1.4.0
+requests==2.31.0
 EOF
 
     # Create Dockerfile
