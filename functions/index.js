@@ -311,7 +311,7 @@ exports.inserisciAnagrafica = onCall(async (request) => {
     const cognome = extractSurname(messaggio);
     const data_nascita = DataExtractor.extractBirthDate(messaggio);
     const luogo_nascita = DataExtractor.extractCity(messaggio, 'nat[oa]');
-    const citta_residenza = DataExtractor.extractCity(messaggio, 'viv[oa]|abito|risiedo');
+    const citta_residenza = DataExtractor.extractCity(messaggio, 'viv[oa]') || DataExtractor.extractCity(messaggio, 'abito') || DataExtractor.extractCity(messaggio, 'risiedo');
     const sesso = DataExtractor.extractSex(messaggio);
     const altezza = DataExtractor.extractHeight(messaggio);
     const peso = DataExtractor.extractWeight(messaggio);
@@ -719,8 +719,15 @@ function extractSurname(text) {
 
   const patterns = [
     /(?:cognome|surname)\s+(?:è\s+)?([A-ZÀ-Ù][a-zà-ù]+)/i,
-    /sono\s+[A-ZÀ-Ù][a-zà-ù]+\s+([A-ZÀ-Ù][a-zà-ù]+)/i
+    // Fix: pattern più specifico per "sono Nome Cognome"
+    /\bsono\s+([A-ZÀ-Ù][a-zà-ù]+)\s+([A-ZÀ-Ù][a-zà-ù]+)/i
   ];
+
+  // Pattern speciale per "sono Nome Cognome" - prendi il secondo
+  const match2 = text.match(/\bsono\s+([A-ZÀ-Ù][a-zà-ù]+)\s+([A-ZÀ-Ù][a-zà-ù]+)/i);
+  if (match2 && match2[2]) {
+    return match2[2].charAt(0).toUpperCase() + match2[2].slice(1).toLowerCase();
+  }
 
   for (const pattern of patterns) {
     const match = text.match(pattern);
