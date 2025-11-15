@@ -239,15 +239,17 @@ class DataExtractor {
     }
 
     // Pattern positivo migliorato: supporta apostrofi e caratteri speciali per farmaci
-    const pattern = /allergi[coae]*\s+(?:a|al|alla|ai|all')?[:\s]*([a-zà-ù',\s]+?)(?:\.|$|;|\n|,\s*(?:mia|mio|non|seguo|dormo|faccio))/i;
+    const pattern = /allergi[coae]*\s+(?:a|al|alla|ai|all')\s*([a-zà-ù',\s]+?)(?:\.|,|;|$|\s+(?:mia|mio|non|seguo|dormo|faccio))/i;
     const match = textLower.match(pattern);
     if (match) {
-      const allergieStr = match[1].trim();
+      let allergieStr = match[1].trim();
+      // Rimuovi residui di apostrofi all'inizio
+      allergieStr = allergieStr.replace(/^['`]\s*/, '');
+
       // Split su virgola o "e" e pulisci
       const allergies = allergieStr.split(/,|\se\s/)
         .map(a => a.trim())
-        .filter(a => a && a.length > 2)
-        .map(a => a.replace(/^(al|alla|ai|all')\s*/, '')); // rimuovi preposizioni
+        .filter(a => a && a.length > 2);
       return allergies;
     }
 
@@ -260,10 +262,10 @@ class DataExtractor {
     const textLower = text.toLowerCase();
 
     if (field === 'alcohol') {
-      if (/non bevo|mai\s+alcol|zero\s+alcol|non\s+consumo\s+alcol|non\s+fumo/.test(textLower)) {
-        return 'mai';
-      } else if (/raramente|bevo raramente|ogni\s+tanto|poco/.test(textLower)) {
+      if (/raramente|bevo raramente|ogni\s+tanto|poco/.test(textLower)) {
         return 'raramente';
+      } else if (/non bevo|mai\s+alcol|zero\s+alcol|non\s+consumo\s+alcol|non\s+fumo/.test(textLower)) {
+        return 'mai';
       } else if (/qualche\s+volta|occasionalmente/.test(textLower)) {
         return 'qualche volta';
       } else if (/spesso|frequentemente/.test(textLower)) {
@@ -315,24 +317,22 @@ class DataExtractor {
     const textLower = text.toLowerCase();
     const familyHistory = [];
 
-    // Pattern per storia familiare: "mia madre ha diabete", "mio padre ha ipertensione"
-    const patterns = [
-      /\b(mi[ao]|mia)\s+(madre|padre|fratello|sorella|nonno|nonna|zio|zia)\s+(?:ha|aveva|soffre|soffriva)\s+(?:un\s+)?(?:lieve\s+|grave\s+)?([a-zà-ù\s]+?)(?:\.|,|;|$|\s+non\b)/g,
-      /\b(madre|padre|fratello|sorella|nonno|nonna|zio|zia)\s+(?:ha|aveva|soffre|soffriva)\s+(?:un\s+)?(?:lieve\s+|grave\s+)?([a-zà-ù\s]+?)(?:\.|,|;|$|\s+non\b)/g
-    ];
+    // Pattern più specifico per evitare duplicati
+    const pattern = /\b(?:mi[ao]\s+)?(madre|padre|fratello|sorella|nonno|nonna|zio|zia)\s+(?:ha|aveva|soffre|soffriva)\s+(?:un\s+)?(?:lieve\s+|grave\s+)?([a-zà-ù\s]+?)(?:\s+non|\.|,|;|$)/g;
 
-    for (const pattern of patterns) {
-      let match;
-      while ((match = pattern.exec(textLower)) !== null) {
-        const familyMember = match[2] || match[1]; // madre, padre, ecc.
-        const disease = match[3] || match[2]; // diabete, ipertensione, ecc.
+    let match;
+    while ((match = pattern.exec(textLower)) !== null) {
+      const familyMember = match[1].trim(); // madre, padre, ecc.
+      let disease = match[2].trim(); // diabete, ipertensione, ecc.
 
-        if (familyMember && disease && disease.trim().length > 2) {
-          familyHistory.push({
-            familyMember: familyMember.trim(),
-            disease: disease.trim()
-          });
-        }
+      // Pulisci la malattia da parole spurie
+      disease = disease.replace(/\b(non|fumo|bevo|dormo|faccio|sport|ore|notte|raramente|volte|settimana)\b.*$/, '').trim();
+
+      if (familyMember && disease && disease.length > 2) {
+        familyHistory.push({
+          familyMember: familyMember,
+          disease: disease
+        });
       }
     }
 
