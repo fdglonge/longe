@@ -238,13 +238,16 @@ class DataExtractor {
       return [];
     }
 
-    // Pattern positivo: "allergico a pesce, glutine"
-    const pattern = /allergi[coae]*\s+(?:a|al|alla|ai)?[:\s]*([a-zà-ù,\s]+?)(?:\.|$|;|\n|non\b|seguo\b|dormo\b|faccio\b)/;
+    // Pattern positivo migliorato: supporta apostrofi e caratteri speciali per farmaci
+    const pattern = /allergi[coae]*\s+(?:a|al|alla|ai|all')?[:\s]*([a-zà-ù',\s]+?)(?:\.|$|;|\n|,\s*(?:mia|mio|non|seguo|dormo|faccio))/i;
     const match = textLower.match(pattern);
     if (match) {
       const allergieStr = match[1].trim();
-      // Split su virgola o "e"
-      const allergies = allergieStr.split(/,|\se\s/).map(a => a.trim()).filter(a => a && a.length > 2);
+      // Split su virgola o "e" e pulisci
+      const allergies = allergieStr.split(/,|\se\s/)
+        .map(a => a.trim())
+        .filter(a => a && a.length > 2)
+        .map(a => a.replace(/^(al|alla|ai|all')\s*/, '')); // rimuovi preposizioni
       return allergies;
     }
 
@@ -257,9 +260,9 @@ class DataExtractor {
     const textLower = text.toLowerCase();
 
     if (field === 'alcohol') {
-      if (/non bevo|mai\s+alcol|zero\s+alcol|non\s+consumo\s+alcol/.test(textLower)) {
+      if (/non bevo|mai\s+alcol|zero\s+alcol|non\s+consumo\s+alcol|non\s+fumo/.test(textLower)) {
         return 'mai';
-      } else if (/raramente\s+bevo|ogni\s+tanto/.test(textLower)) {
+      } else if (/raramente|bevo raramente|ogni\s+tanto|poco/.test(textLower)) {
         return 'raramente';
       } else if (/qualche\s+volta|occasionalmente/.test(textLower)) {
         return 'qualche volta';
@@ -269,11 +272,25 @@ class DataExtractor {
         return 'quotidianamente';
       }
     } else if (field === 'sleep') {
-      // "dormo 7 ore", "dormo circa 7-8 ore"
-      const pattern = /dorm[oi]\s+(?:circa\s+)?(\d+)(?:-\d+)?\s*(?:ore|h)/;
-      const match = textLower.match(pattern);
-      if (match) {
-        return parseInt(match[1]);
+      // Mapping numeri in lettere
+      const numeroParole = {
+        'una': 1, 'due': 2, 'tre': 3, 'quattro': 4, 'cinque': 5,
+        'sei': 6, 'sette': 7, 'otto': 8, 'nove': 9, 'dieci': 10
+      };
+
+      // Pattern numerico normale: "dormo 7 ore"
+      const patternNum = /dorm[oi]\s+(?:circa\s+)?(\d+)(?:-\d+)?\s*(?:ore|h)/;
+      const matchNum = textLower.match(patternNum);
+      if (matchNum) {
+        return parseInt(matchNum[1]);
+      }
+
+      // Pattern con numeri in lettere: "dormo sette ore"
+      for (const [parola, numero] of Object.entries(numeroParole)) {
+        const patternParole = new RegExp(`dorm[oi]\\s+(?:circa\\s+)?${parola}\\s*(?:ore|h)`, 'i');
+        if (patternParole.test(textLower)) {
+          return numero;
+        }
       }
     } else if (field === 'physical_activity_freq') {
       if (/non\s+faccio|mai\s+sport|sedentari[oa]|non\s+pratico/.test(textLower)) {
@@ -290,6 +307,36 @@ class DataExtractor {
     }
 
     return null;
+  }
+
+  static extractFamilyHistory(text) {
+    if (!text || typeof text !== 'string') return [];
+
+    const textLower = text.toLowerCase();
+    const familyHistory = [];
+
+    // Pattern per storia familiare: "mia madre ha diabete", "mio padre ha ipertensione"
+    const patterns = [
+      /\b(mi[ao]|mia)\s+(madre|padre|fratello|sorella|nonno|nonna|zio|zia)\s+(?:ha|aveva|soffre|soffriva)\s+(?:un\s+)?(?:lieve\s+|grave\s+)?([a-zà-ù\s]+?)(?:\.|,|;|$|\s+non\b)/g,
+      /\b(madre|padre|fratello|sorella|nonno|nonna|zio|zia)\s+(?:ha|aveva|soffre|soffriva)\s+(?:un\s+)?(?:lieve\s+|grave\s+)?([a-zà-ù\s]+?)(?:\.|,|;|$|\s+non\b)/g
+    ];
+
+    for (const pattern of patterns) {
+      let match;
+      while ((match = pattern.exec(textLower)) !== null) {
+        const familyMember = match[2] || match[1]; // madre, padre, ecc.
+        const disease = match[3] || match[2]; // diabete, ipertensione, ecc.
+
+        if (familyMember && disease && disease.trim().length > 2) {
+          familyHistory.push({
+            familyMember: familyMember.trim(),
+            disease: disease.trim()
+          });
+        }
+      }
+    }
+
+    return familyHistory;
   }
 }
 
@@ -392,6 +439,7 @@ exports.completaStoriaMedica = onCall(async (request) => {
     const alcol = DataExtractor.extractLifestyleField(messaggio, 'alcohol');
     const sonno_ore = DataExtractor.extractLifestyleField(messaggio, 'sleep');
     const attivita_fisica_freq = DataExtractor.extractLifestyleField(messaggio, 'physical_activity_freq');
+    const family_history_disease = DataExtractor.extractFamilyHistory(messaggio);
 
     const datiEstratti = {
       alcol,
@@ -405,6 +453,11 @@ exports.completaStoriaMedica = onCall(async (request) => {
       datiEstratti.allergie = allergie;
     }
 
+    // Add family_history_disease only if not empty array
+    if (family_history_disease && family_history_disease.length > 0) {
+      datiEstratti.family_history_disease = family_history_disease;
+    }
+
     // Remove null/undefined values
     Object.keys(datiEstratti).forEach(key => {
       if (datiEstratti[key] === null || datiEstratti[key] === undefined) {
@@ -413,7 +466,7 @@ exports.completaStoriaMedica = onCall(async (request) => {
     });
 
     // Check completeness
-    const campiMedici = ['allergie', 'alcol', 'sonno_ore', 'attivita_fisica_freq'];
+    const campiMedici = ['allergie', 'alcol', 'sonno_ore', 'attivita_fisica_freq', 'family_history_disease'];
     const campiCompilati = campiMedici.filter(campo =>
       datiEstratti[campo] !== null &&
       datiEstratti[campo] !== undefined &&
