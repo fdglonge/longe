@@ -316,7 +316,7 @@ exports.inserisciAnagrafica = onCall(async (request) => {
     const altezza = DataExtractor.extractHeight(messaggio);
     const peso = DataExtractor.extractWeight(messaggio);
     const email = DataExtractor.extractEmail(messaggio);
-    const allergie = DataExtractor.extractAllergies(messaggio);
+    // Removed allergie - that's for completaStoriaMedica
     const alcol = DataExtractor.extractLifestyleField(messaggio, 'alcohol');
     const sonno_ore = DataExtractor.extractLifestyleField(messaggio, 'sleep');
     const attivita_fisica_freq = DataExtractor.extractLifestyleField(messaggio, 'physical_activity_freq');
@@ -331,7 +331,7 @@ exports.inserisciAnagrafica = onCall(async (request) => {
       altezza,
       peso,
       email,
-      allergie,
+      // allergie removed
       alcol,
       sonno_ore,
       attivita_fisica_freq
