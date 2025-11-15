@@ -238,18 +238,22 @@ class DataExtractor {
       return [];
     }
 
-    // Pattern positivo migliorato: supporta apostrofi e caratteri speciali per farmaci
-    const pattern = /allergi[coae]*\s+(?:a|al|alla|ai|all')\s*([a-zà-ù',\s]+?)(?:\.|,|;|$|\s+(?:mia|mio|non|seguo|dormo|faccio))/i;
+    // Pattern più preciso per gestire "allergico all'amoxicillina"
+    const pattern = /allergi[coae]*\s+(?:a\s+|al\s+|alla\s+|ai\s+|all'\s*)?([a-zà-ù][a-zà-ù',\s]*?)(?:\s*,|\s+(?:mia|mio|non|seguo|dormo|faccio)|\.|\;|$)/i;
     const match = textLower.match(pattern);
     if (match) {
       let allergieStr = match[1].trim();
-      // Rimuovi residui di apostrofi all'inizio
-      allergieStr = allergieStr.replace(/^['`]\s*/, '');
 
-      // Split su virgola o "e" e pulisci
+      // Split su virgola o "e" e pulisci ogni allergia
       const allergies = allergieStr.split(/,|\se\s/)
         .map(a => a.trim())
-        .filter(a => a && a.length > 2);
+        .filter(a => a && a.length > 1)
+        .map(a => {
+          // Rimuovi caratteri spurii all'inizio/fine
+          return a.replace(/^['`l]*\s*/, '').replace(/\s*['`]*$/, '');
+        })
+        .filter(a => a.length > 1);
+
       return allergies;
     }
 

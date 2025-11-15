@@ -11,7 +11,6 @@ from dataclasses import dataclass
 import firebase_admin
 from firebase_admin import credentials, firestore
 from datetime import datetime
-import os
 
 # Setup logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -89,8 +88,8 @@ class LongevivaFoodDatabase:
                     })
                     logger.info("Using Application Default Credentials (gcloud)")
 
-            self.db = firestore.client()
-            logger.info(f"Firebase initialized for project: {self.project_id} (default database)")
+            self.db = firestore.client(database=self.database_id)
+            logger.info(f"Firebase initialized for project: {self.project_id}, database: {self.database_id}")
 
         except Exception as e:
             logger.error(f"Firebase initialization failed: {e}")
