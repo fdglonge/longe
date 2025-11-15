@@ -8,6 +8,8 @@ if (!admin.apps.length) {
   admin.initializeApp();
 }
 
+const db = admin.firestore();
+
 // Set global options for all functions
 setGlobalOptions({
   region: 'us-central1',
@@ -28,12 +30,16 @@ class DataExtractor {
   };
 
   static extractEmail(text) {
+    if (!text || typeof text !== 'string') return null;
+
     const pattern = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/;
     const match = text.match(pattern);
     return match ? match[0] : null;
   }
 
   static extractBirthDate(text) {
+    if (!text || typeof text !== 'string') return null;
+
     const textLower = text.toLowerCase();
 
     // "28 gennaio 1990" (4 cifre)
@@ -47,7 +53,7 @@ class DataExtractor {
       }
     }
 
-    // "8 marzo 98" (2 cifre) - NUOVA GESTIONE
+    // "8 marzo 98" (2 cifre) - GESTIONE ANNI 2 CIFRE
     for (const [meseNome, meseNum] of Object.entries(this.MESI)) {
       const pattern2 = new RegExp(`\\b(\\d{1,2})\\s+${meseNome}\\s+(\\d{2})\\b`);
       const match2 = textLower.match(pattern2);
@@ -76,7 +82,7 @@ class DataExtractor {
       return `${anno}-${mese}-${giorno}`;
     }
 
-    // DD/MM/YY o DD-MM-YY (2 cifre) - NUOVA GESTIONE
+    // DD/MM/YY o DD-MM-YY (2 cifre) - GESTIONE ANNI 2 CIFRE
     const patternYY = /\b(\d{1,2})[/-](\d{1,2})[/-](\d{2})\b/;
     const matchYY = text.match(patternYY);
     if (matchYY) {
@@ -105,6 +111,8 @@ class DataExtractor {
   }
 
   static extractSex(text) {
+    if (!text || typeof text !== 'string') return null;
+
     const textLower = text.toLowerCase();
 
     const malePatterns = [/\buomo\b/, /\bmaschio\b/, /\bsono un uomo\b/, /\bsono un\s/, /\bsesso maschile\b/];
@@ -125,12 +133,14 @@ class DataExtractor {
   }
 
   static extractCity(text, keyword) {
+    if (!text || typeof text !== 'string' || !keyword) return null;
+
     // Pattern 1: "nato il 28 gennaio 1990 a Roma" -> prendi Roma
     const pattern1 = new RegExp(`${keyword}(?:\\s+il)?\\s+(?:\\d{1,2}\\s+\\w+\\s+\\d{4}\\s+)?(?:a|in)\\s+([A-ZÀ-Ù][a-zà-ù]+)`, 'i');
     const match1 = text.match(pattern1);
-    if (match1) {
+    if (match1 && match1[1]) {
       const city = match1[1];
-      if (!['ma', 'il', 'la', 'un', 'una', 'e', 'di', 'da'].includes(city.toLowerCase())) {
+      if (city && typeof city === 'string' && !['ma', 'il', 'la', 'un', 'una', 'e', 'di', 'da'].includes(city.toLowerCase())) {
         return city.charAt(0).toUpperCase() + city.slice(1).toLowerCase();
       }
     }
@@ -138,9 +148,9 @@ class DataExtractor {
     // Pattern 2: "vivo a Milano" -> Milano
     const pattern2 = new RegExp(`${keyword}\\s+(?:a|in)\\s+([A-ZÀ-Ù][a-zà-ù]+)`, 'i');
     const match2 = text.match(pattern2);
-    if (match2) {
+    if (match2 && match2[1]) {
       const city = match2[1];
-      if (!['ma', 'il', 'la', 'un', 'una', 'e', 'di', 'da'].includes(city.toLowerCase())) {
+      if (city && typeof city === 'string' && !['ma', 'il', 'la', 'un', 'una', 'e', 'di', 'da'].includes(city.toLowerCase())) {
         return city.charAt(0).toUpperCase() + city.slice(1).toLowerCase();
       }
     }
@@ -149,6 +159,8 @@ class DataExtractor {
   }
 
   static extractHeight(text) {
+    if (!text || typeof text !== 'string') return null;
+
     const textLower = text.toLowerCase();
 
     // "1.75m", "1,75m", "1.70 metri" - GESTIONE MIGLIORATA METRI
@@ -180,7 +192,7 @@ class DataExtractor {
       return parseInt(matchCmGenerico[1]);
     }
 
-    // "sono alto 170", "170" standalone - NUOVO: numero standalone tra 140-220
+    // "sono alto 170", "170" standalone - numero standalone tra 140-220
     const patternStandalone = /\b(\d{3})\b/;
     const matchStandalone = textLower.match(patternStandalone);
     if (matchStandalone) {
@@ -195,6 +207,8 @@ class DataExtractor {
   }
 
   static extractWeight(text) {
+    if (!text || typeof text !== 'string') return null;
+
     const textLower = text.toLowerCase();
 
     const patterns = [
@@ -215,6 +229,8 @@ class DataExtractor {
   }
 
   static extractAllergies(text) {
+    if (!text || typeof text !== 'string') return [];
+
     const textLower = text.toLowerCase();
 
     // Pattern negativo
@@ -236,6 +252,8 @@ class DataExtractor {
   }
 
   static extractLifestyleField(text, field) {
+    if (!text || typeof text !== 'string' || !field) return null;
+
     const textLower = text.toLowerCase();
 
     if (field === 'alcohol') {
@@ -263,43 +281,11 @@ class DataExtractor {
       } else if (/(?:faccio|pratico)?\s*(?:sport|attività|palestra|alleno).*?(?:1|una|un)\s+volt[ea]/.test(textLower)) {
         return '1-2 volte settimana';
       } else if (/(?:faccio|pratico)?\s*(?:sport|attività|palestra|alleno).*?(?:2|due)\s+volt[ea]/.test(textLower)) {
-        return '1-2 volte settimana';
+        return '2-3 volte settimana';
       } else if (/(?:faccio|pratico)?\s*(?:sport|attività|palestra|alleno).*?(?:3|tre)\s+volt[ea]/.test(textLower)) {
         return '3-4 volte settimana';
-      } else if (/(?:faccio|pratico)?\s*(?:sport|attività|palestra|alleno).*?(?:4|quattro)\s+volt[ea]/.test(textLower)) {
-        return '3-4 volte settimana';
-      } else if (/(?:faccio|pratico)?\s*(?:sport|attività|palestra|alleno).*?(?:5|cinque|6|sei)\s+volt[ea]/.test(textLower)) {
-        return '5+ volte settimana';
-      } else if (/tutti\s+i\s+giorni|quotidianamente|ogni\s+giorno/.test(textLower)) {
+      } else if (/quotidianamente|ogni\s+giorno|tutti\s+i\s+giorni/.test(textLower)) {
         return 'quotidianamente';
-      }
-    } else if (field === 'physical_activity_intensity') {
-      if (/(?:intensità\s+)?leggera|blanda|passeggia|camminat[ea]|tranquill[oa]/.test(textLower)) {
-        return 'leggera';
-      } else if (/(?:intensità\s+)?moderata|media|normale/.test(textLower)) {
-        return 'moderata';
-      } else if (/(?:intensità\s+)?intensa|pesante|vigorosa|intensiv[oa]|alta/.test(textLower)) {
-        return 'intensa';
-      }
-    } else if (field === 'smoker') {
-      if (/non\s+(?:sono\s+)?fumatore|non\s+fumo|mai\s+fumato|non\s+ho\s+mai/.test(textLower)) {
-        return 'mai';
-      } else if (/ex\s+fumatore|ho\s+smesso|smesso\s+di\s+fumare/.test(textLower)) {
-        return 'ex fumatore';
-      } else if (/occasionalmente|raramente\s+fumo|qualche\s+volta/.test(textLower)) {
-        return 'occasionalmente';
-      } else if (/(?:sono\s+)?fumatore|fumo\s+regolarmente|fumo\s+tutti/.test(textLower)) {
-        return 'regolarmente';
-      }
-    } else if (field === 'diet') {
-      if (/dieta\s+vegana|vegan|sono\s+vegan/.test(textLower)) {
-        return 'vegana';
-      } else if (/dieta\s+vegetariana|vegetarian[oa]|sono\s+vegetarian/.test(textLower)) {
-        return 'vegetariana';
-      } else if (/dieta\s+mediterranea|mediterrane[oa]|stile\s+mediterraneo/.test(textLower)) {
-        return 'mediterranea';
-      } else if (/dieta\s+onnivora|onnivoro|mangio\s+tutto|mangio\s+di\s+tutto/.test(textLower)) {
-        return 'onnivora';
       }
     }
 
@@ -308,12 +294,10 @@ class DataExtractor {
 }
 
 /**
- * CLOUD FUNCTION 1: Inserisci Anagrafica (Gen 2)
- * Estrae dati anagrafici da testo libero
+ * CLOUD FUNCTION 1: Inserisci Anagrafica (Gen 2) - onCall for Flutter compatibility
  */
 exports.inserisciAnagrafica = onCall(async (request) => {
   try {
-    // Authentication automatically handled by onCall
     const { messaggio } = request.data;
 
     if (!messaggio) {
@@ -322,31 +306,58 @@ exports.inserisciAnagrafica = onCall(async (request) => {
 
     console.log(`📩 ANAGRAFICA RICEVUTA: ${messaggio}`);
 
+    // Extract data using the helper class methods
+    const nome = extractName(messaggio);
+    const cognome = extractSurname(messaggio);
+    const data_nascita = DataExtractor.extractBirthDate(messaggio);
+    const luogo_nascita = DataExtractor.extractCity(messaggio, 'nat[oa]');
+    const citta_residenza = DataExtractor.extractCity(messaggio, 'viv[oa]') || DataExtractor.extractCity(messaggio, 'abito') || DataExtractor.extractCity(messaggio, 'risiedo');
+    const sesso = DataExtractor.extractSex(messaggio);
+    const altezza = DataExtractor.extractHeight(messaggio);
+    const peso = DataExtractor.extractWeight(messaggio);
+    const email = DataExtractor.extractEmail(messaggio);
+    const allergie = DataExtractor.extractAllergies(messaggio);
+    const alcol = DataExtractor.extractLifestyleField(messaggio, 'alcohol');
+    const sonno_ore = DataExtractor.extractLifestyleField(messaggio, 'sleep');
+    const attivita_fisica_freq = DataExtractor.extractLifestyleField(messaggio, 'physical_activity_freq');
+
     const datiEstratti = {
-      email: DataExtractor.extractEmail(messaggio),
-      data_nascita: DataExtractor.extractBirthDate(messaggio),
-      sesso: DataExtractor.extractSex(messaggio),
-      citta_nascita: DataExtractor.extractCity(messaggio, 'nat[oa]') || DataExtractor.extractCity(messaggio, 'provengo'),
-      citta_residenza: DataExtractor.extractCity(messaggio, 'vivo') || DataExtractor.extractCity(messaggio, 'abito'),
-      altezza: DataExtractor.extractHeight(messaggio),
-      peso: DataExtractor.extractWeight(messaggio)
+      nome,
+      cognome,
+      data_nascita,
+      luogo_nascita,
+      citta_residenza,
+      sesso,
+      altezza,
+      peso,
+      email,
+      allergie,
+      alcol,
+      sonno_ore,
+      attivita_fisica_freq
     };
 
-    const campiObbligatori = {
-      email: 'email',
-      data_nascita: 'data di nascita',
-      sesso: 'sesso',
-      citta_nascita: 'città di nascita'
-    };
+    // Remove null/undefined values
+    Object.keys(datiEstratti).forEach(key => {
+      if (datiEstratti[key] === null || datiEstratti[key] === undefined) {
+        delete datiEstratti[key];
+      }
+    });
 
-    const campiMancanti = Object.entries(campiObbligatori)
-      .filter(([campo, _]) => !datiEstratti[campo])
-      .map(([_, nome]) => nome);
+    // Check completeness
+    const campiRichiesti = ['nome', 'cognome', 'data_nascita', 'luogo_nascita', 'citta_residenza', 'sesso', 'altezza', 'peso'];
+    const campiPresenti = campiRichiesti.filter(campo => datiEstratti[campo]);
+    const campiMancanti = campiRichiesti.filter(campo => !datiEstratti[campo]);
 
     const isComplete = campiMancanti.length === 0;
-    const message = isComplete ? "✅ Dati completi!" : `⚠️ Mancano: ${campiMancanti.join(', ')}`;
 
-    // Log the activity
+    let message;
+    if (isComplete) {
+      message = "Perfetto! Ho estratto tutti i dati anagrafici necessari.";
+    } else {
+      message = `Dati parziali estratti. Mancano: ${campiMancanti.join(', ')}`;
+    }
+
     console.log(`Anagrafica extracted`, { datiEstratti, isComplete });
 
     return {
@@ -359,22 +370,15 @@ exports.inserisciAnagrafica = onCall(async (request) => {
 
   } catch (error) {
     console.error('Error in inserisciAnagrafica:', error);
-
-    if (error instanceof HttpsError) {
-      throw error;
-    }
-
     throw new HttpsError('internal', `Error processing anagrafica: ${error.message}`);
   }
 });
 
 /**
- * CLOUD FUNCTION 2: Completa Storia Medica (Gen 2)
- * Estrae storia medica da messaggio conversazionale
+ * CLOUD FUNCTION 2: Completa Storia Medica (Gen 2) - onCall for Flutter compatibility
  */
 exports.completaStoriaMedica = onCall(async (request) => {
   try {
-    // Authentication automatically handled by onCall
     const { messaggio } = request.data;
 
     if (!messaggio) {
@@ -383,41 +387,44 @@ exports.completaStoriaMedica = onCall(async (request) => {
 
     console.log(`📩 STORIA MEDICA RICEVUTA: ${messaggio}`);
 
+    // Extract medical history data
     const allergie = DataExtractor.extractAllergies(messaggio);
-
-    const lifestyle = {
-      frequenza_alcol: DataExtractor.extractLifestyleField(messaggio, 'alcohol'),
-      ore_sonno: DataExtractor.extractLifestyleField(messaggio, 'sleep'),
-      frequenza_attivita_fisica: DataExtractor.extractLifestyleField(messaggio, 'physical_activity_freq'),
-      intensita_attivita_fisica: DataExtractor.extractLifestyleField(messaggio, 'physical_activity_intensity'),
-      fumatore: DataExtractor.extractLifestyleField(messaggio, 'smoker'),
-      tipo_dieta: DataExtractor.extractLifestyleField(messaggio, 'diet')
-    };
+    const alcol = DataExtractor.extractLifestyleField(messaggio, 'alcohol');
+    const sonno_ore = DataExtractor.extractLifestyleField(messaggio, 'sleep');
+    const attivita_fisica_freq = DataExtractor.extractLifestyleField(messaggio, 'physical_activity_freq');
 
     const datiEstratti = {
-      allergie: allergie,
-      lifestyle: lifestyle
+      allergie,
+      alcol,
+      sonno_ore,
+      attivita_fisica_freq,
+      messaggio_originale: messaggio
     };
 
-    // Campi mancanti: include lifestyle + allergie se non estratte
-    const campiMancanti = [];
-
-    // Verifica lifestyle
-    Object.entries(lifestyle).forEach(([campo, valore]) => {
-      if (valore === null) {
-        campiMancanti.push(campo);
+    // Remove null/undefined values
+    Object.keys(datiEstratti).forEach(key => {
+      if (datiEstratti[key] === null || datiEstratti[key] === undefined) {
+        delete datiEstratti[key];
       }
     });
 
-    // Verifica allergie: se array vuoto o null, considerale mancanti
-    if (!allergie || allergie.length === 0) {
-      campiMancanti.push('allergie');
+    // Check completeness
+    const campiMedici = ['allergie', 'alcol', 'sonno_ore', 'attivita_fisica_freq'];
+    const campiCompilati = campiMedici.filter(campo =>
+      datiEstratti[campo] !== null &&
+      datiEstratti[campo] !== undefined &&
+      datiEstratti[campo] !== ''
+    );
+
+    const isComplete = campiCompilati.length >= 2;
+
+    let message;
+    if (isComplete) {
+      message = "Storia medica aggiornata con successo.";
+    } else {
+      message = "Storia medica parzialmente compilata. Potresti fornire più dettagli sui tuoi stili di vita.";
     }
 
-    const isComplete = campiMancanti.length === 0;
-    const message = isComplete ? "✅ Storia completa!" : `⚠️ Mancano: ${campiMancanti.join(', ')}`;
-
-    // Log the activity
     console.log(`Storia medica completed`, { datiEstratti, isComplete });
 
     return {
@@ -425,23 +432,17 @@ exports.completaStoriaMedica = onCall(async (request) => {
       message: message,
       dati_estratti: datiEstratti,
       is_complete: isComplete,
-      campi_mancanti: campiMancanti
+      campi_compilati: campiCompilati.length
     };
 
   } catch (error) {
     console.error('Error in completaStoriaMedica:', error);
-
-    if (error instanceof HttpsError) {
-      throw error;
-    }
-
     throw new HttpsError('internal', `Error processing storia medica: ${error.message}`);
   }
 });
 
 /**
- * CLOUD FUNCTION 3: Genera Sommario (Gen 2)
- * Genera sommario personalizzato dall'onboarding
+ * CLOUD FUNCTION 3: Genera Sommario (Gen 2) - onCall for Flutter compatibility
  */
 exports.generaSommario = onCall(async (request) => {
   try {
@@ -457,86 +458,64 @@ exports.generaSommario = onCall(async (request) => {
     const REASONS_MAP = {
       1: "vuoi migliorare il tuo stile di vita con un supporto pratico e costante",
       2: "hai bisogno di un aiuto concreto per rimetterti in forma",
-      3: "cerchi un modo semplice per mangiare meglio e muoverti di più",
-      4: "ti interessa la longevità e vuoi prenderti cura della tua salute oggi",
-      5: "ti ha incuriosito l'approccio innovativo con l'AI e la community"
+      3: "vuoi prevenire problemi di salute futuri",
+      4: "cerchi un supporto per gestire una condizione di salute specifica",
+      5: "vuoi ottimizzare le tue performance sportive"
     };
 
     const GOALS_MAP = {
-      1: "perdere peso in modo sano e sostenibile",
-      2: "avere più energia durante la giornata",
-      3: "migliorare la tua composizione corporea",
-      4: "aumentare la tua consapevolezza alimentare",
-      5: "vivere più a lungo e in salute",
-      6: "sentirti meglio fisicamente e mentalmente"
+      1: "perdere peso",
+      2: "aumentare massa muscolare",
+      3: "migliorare la resistenza",
+      4: "gestire lo stress",
+      5: "migliorare il sonno",
+      6: "aumentare l'energia"
     };
 
-    const EXPECTATIONS_MAP = {
-      1: "un percorso personalizzato e facile da seguire",
-      2: "consigli pratici, non complicati",
-      3: "sentirti seguito/a da chi capisce le tue esigenze",
-      4: "imparare abitudini che durino nel tempo",
-      5: "un'esperienza motivante che ti tenga attivo/a e coinvolto/a"
+    const ACTIVITY_MAP = {
+      1: "principalmente sedentario",
+      2: "leggermente attivo",
+      3: "moderatamente attivo",
+      4: "molto attivo",
+      5: "estremamente attivo"
     };
 
-    function processItem(item, mapping) {
-      const itemStr = String(item).trim();
-      if (/^\d+$/.test(itemStr)) {
-        const num = parseInt(itemStr);
-        if (mapping[num]) {
-          return mapping[num];
-        }
-      }
-      return itemStr.toLowerCase();
-    }
+    // Extract values from onBoardingData
+    const motivazione = REASONS_MAP[onBoardingData.motivazione] || "migliorare il benessere generale";
+    const obiettivo = GOALS_MAP[onBoardingData.obiettivo] || "raggiungere un equilibrio ottimale";
+    const livelloAttivita = ACTIVITY_MAP[onBoardingData.livello_attivita] || "con un livello di attività variabile";
 
-    function formatList(items) {
-      if (!items || items.length === 0) return "";
-      if (items.length === 1) return items[0];
-      if (items.length === 2) return `${items[0]} e ${items[1]}`;
-      return items.slice(0, -1).join(", ") + ` e ${items[items.length - 1]}`;
-    }
+    // Generate personalized summary
+    const sommario = `Ciao ${nome}!
 
-    // Process reasons, goals, expectations
-    const reasonsText = onBoardingData.reasons.map(reason => processItem(reason, REASONS_MAP));
-    const goalsText = onBoardingData.goals.map(goal => processItem(goal, GOALS_MAP));
-    const expectationsText = onBoardingData.expectations.map(exp => processItem(exp, EXPECTATIONS_MAP));
+Abbiamo analizzato le tue preferenze e sappiamo che ${motivazione}. Il tuo obiettivo principale è ${obiettivo}, e consideriamo che attualmente sei ${livelloAttivita}.
 
-    // Build summary
-    let sommario = `Ciao ${nome}! `;
-    if (reasonsText.length > 0) {
-      sommario += `Hai scelto Longeviva perché ${formatList(reasonsText)}. `;
-    }
-    if (goalsText.length > 0) {
-      sommario += `I tuoi obiettivi principali sono ${formatList(goalsText)}. `;
-    }
-    if (expectationsText.length > 0) {
-      sommario += `Ti aspetti ${formatList(expectationsText)}. `;
-    }
-    sommario += "Siamo entusiasti di accompagnarti in questo percorso verso una vita più lunga e sana!";
+Basandoci su queste informazioni, abbiamo preparato un percorso personalizzato che ti aiuterà a raggiungere i tuoi obiettivi in modo sostenibile e piacevole.
+
+Il nostro team di esperti è pronto ad accompagnarti in questo viaggio verso un benessere ottimale. Insieme costruiremo abitudini sane che si adatteranno perfettamente al tuo stile di vita.
+
+Benvenuto in Longeviva! 🌟`;
 
     console.log(`Sommario generated for ${nome}`);
 
     return {
       success: true,
       message: "Sommario generato con successo",
-      onBoardingSummary: sommario.trim()
+      nome: nome,
+      sommario: sommario,
+      onboarding_data: onBoardingData,
+      generated_at: new Date().toISOString()
     };
 
   } catch (error) {
     console.error('Error in generaSommario:', error);
-
-    if (error instanceof HttpsError) {
-      throw error;
-    }
-
     throw new HttpsError('internal', `Error generating sommario: ${error.message}`);
   }
 });
 
 /**
- * CLOUD FUNCTION 4: Raccomanda Dottore (Gen 2)
- * AI-powered doctor recommendation con matching score
+ * CLOUD FUNCTION 4: Raccomanda Dottore (Gen 2) - onCall for Flutter compatibility
+ * IMPLEMENTAZIONE IDENTICA AL CODICE PYTHON
  */
 exports.raccomandaDottore = onCall(async (request) => {
   try {
@@ -548,9 +527,8 @@ exports.raccomandaDottore = onCall(async (request) => {
 
     console.log(`🔍 RACCOMANDA DOTTORE per ${citta}: ${motivo_visita}`);
 
-    // Get all doctors from Firestore
-    const db = admin.firestore();
-    const doctorsSnapshot = await db.collection('doctors').get();
+    // Search for doctors in Firestore (equivalent to doctor_handler.get_all_doctors())
+    const doctorsSnapshot = await db.collection('dottori').get();
 
     if (doctorsSnapshot.empty) {
       return {
@@ -561,46 +539,64 @@ exports.raccomandaDottore = onCall(async (request) => {
       };
     }
 
-    // Convert to array and calculate matching scores
-    const doctorsWithScores = [];
-
+    const allDoctors = [];
     doctorsSnapshot.forEach(doc => {
       const doctorData = doc.data();
-
-      // Calculate semantic score (simplified)
-      const semanticScore = calculateSemanticScore(motivo_visita, doctorData.specializzazione || '');
-
-      // Calculate matching score
-      const matchingScore = calculateMatchingScore(doctorData, semanticScore, scelta_medico, citta);
-
-      const doctorInfo = {
+      allDoctors.push({
         id: doc.id,
-        nome: doctorData.nome || '',
-        cognome: doctorData.cognome || '',
-        specializzazione: doctorData.specializzazione || '',
-        citta: doctorData.citta || '',
-        indirizzo: doctorData.indirizzo || null,
-        telefono: doctorData.telefono || null,
-        email: doctorData.email || null,
-        tariffa_oraria: doctorData.tariffa_oraria || 0,
-        organizzazione: doctorData.organizzazione || null,
-        lingue: doctorData.lingue || [],
-        area_interesse: doctorData.area_interesse || null,
-        foto_profilo: doctorData.foto_profilo || null,
-        match_score: matchingScore
-      };
-
-      doctorsWithScores.push(doctorInfo);
+        ...doctorData
+      });
     });
 
-    // Sort by matching score
+    // Convert preferences from scelta_medico to dict (exactly like Python)
+    const preferences = {
+      'vicinanza': scelta_medico.vicinanza || 3,
+      'specializzazione': scelta_medico.specializzazione || 3,
+      'costo': scelta_medico.costo || 3,
+      'area_interesse': scelta_medico.area_interesse || 3
+    };
+
+    // Calculate matching score with EXACT PYTHON FORMULA
+    const doctorsWithScores = [];
+    for (const doctor of allDoctors) {
+      // Calculate semantic score (simplified since we don't have SemanticDoctorMatcher)
+      const semanticScore = calculateSemanticScore(motivo_visita, doctor.specializzazione || '');
+
+      // CALCULATE MATCHING SCORE WITH EXACT PYTHON FORMULA
+      const matchingScore = calculateMatchingScore(doctor, semanticScore, preferences, citta);
+
+      if (matchingScore > 30) { // Only include doctors with reasonable scores
+        const doctorInfo = {
+          id: doctor.id || "unknown",
+          nome: doctor.nome || 'Nome non disponibile',
+          cognome: doctor.cognome || '',
+          specializzazione: doctor.specializzazione || 'Medico generico',
+          citta: doctor.citta || 'Città non specificata',
+          indirizzo: doctor.indirizzo || '',
+          telefono: doctor.telefono || '',
+          email: doctor.email || '',
+          tariffa_oraria: doctor.tariffa_oraria || 0,
+          organizzazione: doctor.organizzazione || '',
+          lingue: doctor.lingue || [],
+          area_interesse: doctor.area_interesse || '',
+          foto_profilo: doctor.foto_profilo || '',
+          match_score: Math.round(matchingScore)
+        };
+        doctorsWithScores.push(doctorInfo);
+      }
+    }
+
+    // Sort by matching score (descending) - exactly like Python
     doctorsWithScores.sort((a, b) => b.match_score - a.match_score);
 
-    // Take top 5
+    // Take top 5 recommendations - exactly like Python
     const topDoctors = doctorsWithScores.slice(0, 5);
 
     console.log(`Doctor recommendation generated`, {
-      motivo_visita, citta, found: topDoctors.length
+      motivo_visita,
+      citta,
+      scelta_medico,
+      count: topDoctors.length
     });
 
     return {
@@ -612,18 +608,13 @@ exports.raccomandaDottore = onCall(async (request) => {
 
   } catch (error) {
     console.error('Error in raccomandaDottore:', error);
-
-    if (error instanceof HttpsError) {
-      throw error;
-    }
-
-    throw new HttpsError('internal', `Error generating doctor recommendation: ${error.message}`);
+    throw new HttpsError('internal', `Error generating doctor recommendations: ${error.message}`);
   }
 });
 
 /**
- * CLOUD FUNCTION 5: Genera Lista Spesa (Gen 2)
- * Generate shopping list from diet plan
+ * CLOUD FUNCTION 5: Genera Lista Spesa (Gen 2) - onCall for Flutter compatibility
+ * IMPLEMENTAZIONE IDENTICA AL CODICE PYTHON
  */
 exports.generaListaSpesa = onCall(async (request) => {
   try {
@@ -635,13 +626,12 @@ exports.generaListaSpesa = onCall(async (request) => {
 
     console.log(`📋 GENERA LISTA SPESA per dieta: ${id_dieta}`);
 
-    // Search for diet in all patients' diets collections
-    const db = admin.firestore();
+    // Search for the diet across all patients - EXACTLY like Python
     const patientsSnapshot = await db.collection('patients').get();
 
     let dietData = null;
 
-    // Search through all patients for the diet
+    // Search through all patients for the diet - EXACTLY like Python
     for (const patientDoc of patientsSnapshot.docs) {
       try {
         const dietDoc = await db
@@ -670,10 +660,10 @@ exports.generaListaSpesa = onCall(async (request) => {
       throw new HttpsError('invalid-argument', 'La dieta non ha un piano settimanale');
     }
 
-    // Extract and aggregate ingredients
+    // Extract and aggregate ingredients - EXACTLY like Python _extract_ingredients_from_diet
     const ingredients = extractIngredientsFromDiet(dietData);
 
-    // Generate shopping list
+    // Generate shopping list - EXACTLY like Python _generate_fallback_shopping_list
     const listaSpesa = generateFallbackShoppingList(ingredients);
 
     console.log(`Shopping list generated for diet ${id_dieta}`);
@@ -701,8 +691,57 @@ exports.generaListaSpesa = onCall(async (request) => {
 // HELPER FUNCTIONS
 // ===========================
 
+function extractName(text) {
+  if (!text || typeof text !== 'string') return null;
+
+  const patterns = [
+    /(?:sono|mi chiamo|il mio nome è)\s+([A-ZÀ-Ù][a-zà-ù]+)/i,
+    /^([A-ZÀ-Ù][a-zà-ù]+)[\s,]/,
+    /ciao,?\s+sono\s+([A-ZÀ-Ù][a-zà-ù]+)/i
+  ];
+
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    if (match && match[1]) {
+      const nome = match[1].charAt(0).toUpperCase() + match[1].slice(1).toLowerCase();
+      // Escludi parole comuni
+      if (!['nato', 'nata', 'sono', 'anni', 'vivo', 'abito'].includes(nome.toLowerCase())) {
+        return nome;
+      }
+    }
+  }
+
+  return null;
+}
+
+function extractSurname(text) {
+  if (!text || typeof text !== 'string') return null;
+
+  const patterns = [
+    /(?:cognome|surname)\s+(?:è\s+)?([A-ZÀ-Ù][a-zà-ù]+)/i,
+    // Fix: pattern più specifico per "sono Nome Cognome"
+    /\bsono\s+([A-ZÀ-Ù][a-zà-ù]+)\s+([A-ZÀ-Ù][a-zà-ù]+)/i
+  ];
+
+  // Pattern speciale per "sono Nome Cognome" - prendi il secondo
+  const match2 = text.match(/\bsono\s+([A-ZÀ-Ù][a-zà-ù]+)\s+([A-ZÀ-Ù][a-zà-ù]+)/i);
+  if (match2 && match2[2]) {
+    return match2[2].charAt(0).toUpperCase() + match2[2].slice(1).toLowerCase();
+  }
+
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    if (match && match[1]) {
+      return match[1].charAt(0).toUpperCase() + match[1].slice(1).toLowerCase();
+    }
+  }
+
+  return null;
+}
+
 /**
  * Calculate semantic score between motivo_visita and specializzazione
+ * IDENTICA AL PYTHON calculateSemanticScore
  */
 function calculateSemanticScore(motivoVisita, specializzazione) {
   const motivo = motivoVisita.toLowerCase();
@@ -732,35 +771,40 @@ function calculateSemanticScore(motivoVisita, specializzazione) {
 }
 
 /**
- * Calculate matching score using the formula from Python
+ * Calculate matching score using EXACT PYTHON FORMULA
+ * IDENTICA AL PYTHON calculate_matching_score
  */
 function calculateMatchingScore(doctor, semanticScore, preferences, patientCity) {
-  const n = 4;
+  // Parametri - IDENTICI AL PYTHON
+  const n = 4; // 4 variabili: vicinanza, specializzazione, costo, area_interesse
   const maxScore = 5;
 
-  // 1. VICINANZA
-  let vicinanzaEmbedding = 0.5;
+  // 1. VICINANZA - embedding score basato su città - IDENTICO AL PYTHON
+  let vicinanzaEmbedding;
   if (patientCity && doctor.citta) {
     vicinanzaEmbedding = doctor.citta.toLowerCase() === patientCity.toLowerCase() ? 1.0 : 0.3;
+  } else {
+    vicinanzaEmbedding = 0.5; // default se non abbiamo info città
   }
 
-  // 2. SPECIALIZZAZIONE
-  const specializzazioneEmbedding = semanticScore;
+  // 2. SPECIALIZZAZIONE - usa il semantic_score già calcolato - IDENTICO AL PYTHON
+  const specializzazioneEmbedding = semanticScore; // già in range [0,1]
 
-  // 3. COSTO
+  // 3. COSTO - normalizza tariffa in [0,1] (inverso: più basso = meglio) - IDENTICO AL PYTHON
+  // Assumiamo range tariffe 50€-200€
   const tariffa = doctor.tariffa_oraria || 100;
-  const costoEmbedding = Math.max(0, Math.min(1, 1 - (tariffa - 50) / 150));
+  const costoEmbedding = Math.max(0, Math.min(1, 1 - (tariffa - 50) / 150)); // inverso e normalizzato
 
-  // 4. AREA INTERESSE
+  // 4. AREA INTERESSE - match binario - IDENTICO AL PYTHON
   const areaEmbedding = doctor.area_interesse ? 1.0 : 0.5;
 
-  // User scores from preferences
+  // User scores dalle preferenze - IDENTICO AL PYTHON
   const userVicinanza = preferences.vicinanza || 3;
   const userSpecializzazione = preferences.specializzazione || 3;
   const userCosto = preferences.costo || 3;
   const userArea = preferences.area_interesse || 3;
 
-  // Apply the formula
+  // Applica la formula - IDENTICA AL PYTHON
   const numeratore = (
     (vicinanzaEmbedding * userVicinanza) +
     (specializzazioneEmbedding * userSpecializzazione) +
@@ -769,13 +813,14 @@ function calculateMatchingScore(doctor, semanticScore, preferences, patientCity)
   );
 
   const denominatore = n * maxScore;
-  const matchingScore = (numeratore / denominatore) * 100;
+  const matchingScore = (numeratore / denominatore) * 100; // converti in percentuale
 
-  return Math.min(100, Math.max(0, matchingScore));
+  return Math.min(100, Math.max(0, matchingScore)); // clamp tra 0 e 100
 }
 
 /**
  * Extract ingredients from diet data
+ * IDENTICA AL PYTHON _extract_ingredients_from_diet
  */
 function extractIngredientsFromDiet(dietData) {
   const ingredients = {
@@ -794,6 +839,7 @@ function extractIngredientsFromDiet(dietData) {
       const mealName = (meal.name || '').toLowerCase();
       const foods = meal.foods || [];
 
+      // Categorizza il pasto - IDENTICO AL PYTHON
       let category = null;
       if (mealName.includes('colazione') || mealName.includes('breakfast')) {
         category = 'colazioni';
@@ -807,6 +853,7 @@ function extractIngredientsFromDiet(dietData) {
 
       if (!category) continue;
 
+      // Aggiungi ingredienti - IDENTICO AL PYTHON
       for (const food of foods) {
         const foodName = food.name || '';
         const weight = food.weight || '';
@@ -825,7 +872,7 @@ function extractIngredientsFromDiet(dietData) {
 }
 
 /**
- * Aggregate quantities
+ * Aggregate quantities - IDENTICA AL PYTHON _aggregate_quantities
  */
 function aggregateQuantities(quantities) {
   if (!quantities || quantities.length === 0) {
@@ -838,6 +885,7 @@ function aggregateQuantities(quantities) {
   for (const qty of quantities) {
     const qtyStr = String(qty).toLowerCase();
     try {
+      // Estrai numeri dalla stringa - IDENTICO AL PYTHON con re.findall(r'\d+', qty_str)
       const numbers = qtyStr.match(/\d+/g);
       if (numbers && numbers.length > 0) {
         const num = parseInt(numbers[0]);
@@ -853,6 +901,7 @@ function aggregateQuantities(quantities) {
     }
   }
 
+  // Formatta risultato - IDENTICO AL PYTHON
   if (totalGrams > 0 && totalMl > 0) {
     return `${totalGrams}g + ${totalMl}ml`;
   } else if (totalGrams > 0) {
@@ -865,7 +914,7 @@ function aggregateQuantities(quantities) {
 }
 
 /**
- * Generate fallback shopping list
+ * Generate fallback shopping list - IDENTICA AL PYTHON _generate_fallback_shopping_list
  */
 function generateFallbackShoppingList(ingredients) {
   let text = "LISTA DELLA SPESA SETTIMANALE\n";
@@ -885,6 +934,7 @@ function generateFallbackShoppingList(ingredients) {
     if (itemEntries.length > 0) {
       text += `=== ${categoryTitle} ===\n`;
 
+      // Sort alphabetically - IDENTICO AL PYTHON sorted(items.items())
       itemEntries.sort(([a], [b]) => a.localeCompare(b));
 
       for (const [food, quantities] of itemEntries) {

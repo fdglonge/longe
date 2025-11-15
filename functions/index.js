@@ -394,12 +394,16 @@ exports.completaStoriaMedica = onCall(async (request) => {
     const attivita_fisica_freq = DataExtractor.extractLifestyleField(messaggio, 'physical_activity_freq');
 
     const datiEstratti = {
-      allergie,
       alcol,
       sonno_ore,
       attivita_fisica_freq,
       messaggio_originale: messaggio
     };
+
+    // Add allergie only if not empty array
+    if (allergie && allergie.length > 0) {
+      datiEstratti.allergie = allergie;
+    }
 
     // Remove null/undefined values
     Object.keys(datiEstratti).forEach(key => {
@@ -416,13 +420,15 @@ exports.completaStoriaMedica = onCall(async (request) => {
       datiEstratti[campo] !== ''
     );
 
+    const campiMancanti = campiMedici.filter(campo => !campiCompilati.includes(campo));
+
     const isComplete = campiCompilati.length >= 2;
 
     let message;
     if (isComplete) {
       message = "Storia medica aggiornata con successo.";
     } else {
-      message = "Storia medica parzialmente compilata. Potresti fornire più dettagli sui tuoi stili di vita.";
+      message = `Storia medica parzialmente compilata. Mancano: ${campiMancanti.join(', ')}`;
     }
 
     console.log(`Storia medica completed`, { datiEstratti, isComplete });
@@ -432,7 +438,8 @@ exports.completaStoriaMedica = onCall(async (request) => {
       message: message,
       dati_estratti: datiEstratti,
       is_complete: isComplete,
-      campi_compilati: campiCompilati.length
+      campi_compilati: campiCompilati.length,
+      campi_mancanti: campiMancanti
     };
 
   } catch (error) {
